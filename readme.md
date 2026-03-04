@@ -5,17 +5,20 @@ Control application for the AccessHorizon series telescope design.
 ## What is it?
 A numpy, scipy, astropy and pysdr tkinter gui system to facilitate data collection using the AH series or NOOELEC/RTL-SDR based software defined radios.
 
-**This is a work in progress**
+**This is a work in progress:**
+
 ![Shield: Work in progress][status-image]
 
-Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
+Shield: 
+
+[![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
 
 This work is licensed under a
 [Creative Commons Attribution-NonCommercial 4.0 International License][cc-by-nc].
 
 [![CC BY-NC 4.0][cc-by-nc-image]][cc-by-nc]
 
-[status-image]: https://img.shields.io/badge/Status-Work%20in%20Progress-yellow.svg
+[status-image]: https://img.shields.io/badge/Status-Pre%20Alpha%20%28v0.1.0.29-red
 [cc-by-nc]: https://creativecommons.org/licenses/by-nc/4.0/
 [cc-by-nc-image]: https://licensebuttons.net/l/by-nc/4.0/88x31.png
 [cc-by-nc-shield]: https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg
@@ -37,7 +40,9 @@ This work is licensed under a
 
 ## Terms and Conditions
 By downloading, using or altering this software, you agree to the following terms and conditions:
-Definitions
+
+**Definitions**
+
    - "You" refers to the end-user of this software.
    - "This software" refers to the AH-Control application and any associated files, documentation, or resources provided by the PART team.
 1. You understand that this software is provided under the Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license and agree to comply with its terms unless otherwise agreed in writing with the PART team.
