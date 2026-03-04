@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from tools.popup import graphPopup
 
 def plot_basic_graph(root, x, y, title="Graph", xlabel="X-axis", ylabel="Y-axis"):
@@ -17,9 +17,16 @@ def plot_basic_graph(root, x, y, title="Graph", xlabel="X-axis", ylabel="Y-axis"
 
     tk.Label(footer, text="Graph ready", anchor="w").pack(side="left")
 
+    toolbar_frame = tk.Frame(popup.win)
+    toolbar_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 4))
+
     canvas = FigureCanvasTkAgg(fig, master=popup.win)
     canvas.draw()
     canvas.get_tk_widget().pack(side="top", fill="both", expand=True, padx=8, pady=(8, 0))
+
+    toolbar = NavigationToolbar2Tk(canvas, toolbar_frame, pack_toolbar=False)
+    toolbar.update()
+    toolbar.pack(side="left", fill="x")
 
     def close_popup():
         plt.close(fig)
