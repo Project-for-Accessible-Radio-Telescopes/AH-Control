@@ -6,18 +6,23 @@ Control application for the AccessHorizon series telescope design.
 A numpy, scipy, astropy and pysdr tkinter gui system to facilitate data collection using the AH series or NOOELEC/RTL-SDR based software defined radios.
 
 ## FAQ
-1. What happens if it is faulty?
-    - Please open an issue on GitHub or directly contact the PART team for support.
-    - Note: this software is open-source and is intended as a charitable endeavour to support rural education and scientific outreach. All the time into the software is at the discretion of volunteers from the PART team. Considering this and all other administrative and logistical overheads, the software is provided "as-is" without any guarantees or warranties of any kind, either expressed or implied.
+1. I found a bug and/or the software is malfunctioning!
+    - Please open an issue on GitHub or directly contact the PART team at inquiries.part@gmail.com for support.
+    - If you are able to provide a fix, please submit a pull request on GitHub. We welcome and appreciate any contributions to the project.
+    - Note: this software is open-source and is intended as a charitable endeavour to support rural education and scientific outreach. All the time into the software is at the discretion of volunteers from the PART team. Considering this and all other administrative and logistical overheads, the software is provided "as-is" without any guarantees or warranties of any kind, either expressed or implied. Refer to the below [Terms and Conditions](#terms-and-conditions) and LICENCE for more details.
 
-2. Can I use this software for alternative purposes?
+2. How do I set this up?
+    - For prospective schools, we will provide, install and set up the software as a complementary service as part of our telescope deliveries and in-person workshops on the day. Contact [the PART team](mailto:inquiries.part@gmail.com) for more information.
+    - In general, the software is designed to be user-friendly and straightforward to set up. You can find a manual and installation guide at our [website](https://parttelescopes.web.app/installation) or in [installation.md](installation.md). If you encounter any issues during installation, please refer to the FAQ above or contact [the PART team](mailto:inquiries.part@gmail.com) for support.
+
+3. Can I use this software for alternative purposes?
     - This software is open-source under the Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license. As such you can use it for any personal/hobbyist/educational purpose as long as you credit the PART team.
     - For prospective schools, we will provide the latest software and support the set up free of charge as part of our outlook.
     - This software is not intended for commercial use. If you wish to use it commercially, please contact the PART team for licensing information.
 
 ## Terms and Conditions
 By downloading, using or altering this software, you agree to the following terms and conditions:
-0. Definitions
+Definitions
    - "You" refers to the end-user of this software.
    - "This software" refers to the AH-Control application and any associated files, documentation, or resources provided by the PART team.
 1. You understand that this software is provided under the Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license and agree to comply with its terms unless otherwise agreed in writing with the PART team.
