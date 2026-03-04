@@ -15,3 +15,8 @@ class newPopup:
         if self.ui:
             for element in self.ui:
                 element.pack()
+
+class graphPopup(newPopup):
+    def __init__(self, root, name="Graph Popup - AHControl", geometry="400x300", ui=None):
+        super().__init__(root, name, geometry, ui)
+        

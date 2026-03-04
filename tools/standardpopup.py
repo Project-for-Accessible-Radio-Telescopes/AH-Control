@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk
-# import images to be used too
+# import PIL to be used too
 
 class msgPopup:
     def __init__(self, title, message, msgtype="info", size=(400, 250)):
@@ -8,7 +8,7 @@ class msgPopup:
         self.win.title(f"{title} {msgtype.capitalize()} - AH-Control")
         self.win.geometry(f"{size[0]}x{size[1]}")
 
-        
+        # Must include PILLOW for non-GIF images, so I will omit images for now.
 
         # self.error_icon = tk.PhotoImage(file="./assets/visual/error.svg")
         # self.info_icon = tk.PhotoImage(file="./assets/visual/info.svg")
