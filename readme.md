@@ -5,6 +5,17 @@ Control application for the AccessHorizon series telescope design.
 ## What is it?
 A numpy, scipy, astropy and pysdr tkinter gui system to facilitate data collection using the AH series or NOOELEC/RTL-SDR based software defined radios.
 
+Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
+
+This work is licensed under a
+[Creative Commons Attribution-NonCommercial 4.0 International License][cc-by-nc].
+
+[![CC BY-NC 4.0][cc-by-nc-image]][cc-by-nc]
+
+[cc-by-nc]: https://creativecommons.org/licenses/by-nc/4.0/
+[cc-by-nc-image]: https://licensebuttons.net/l/by-nc/4.0/88x31.png
+[cc-by-nc-shield]: https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg
+
 ## FAQ
 1. I found a bug and/or the software is malfunctioning!
     - Please open an issue on GitHub or directly contact the PART team at inquiries.part@gmail.com for support.
