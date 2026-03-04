@@ -1,0 +1,33 @@
+# AH-Control
+
+Control application for the AccessHorizon series telescope design.
+
+## What is it?
+A numpy, scipy, astropy and pysdr tkinter gui system to facilitate data collection using the AH series or NOOELEC/RTL-SDR based software defined radios.
+
+## FAQ
+1. What happens if it is faulty?
+    - Please open an issue on GitHub or directly contact the PART team for support.
+    - Note: this software is open-source and is intended as a charitable endeavour to support rural education and scientific outreach. All the time into the software is at the discretion of volunteers from the PART team. Considering this and all other administrative and logistical overheads, the software is provided "as-is" without any guarantees or warranties of any kind, either expressed or implied.
+
+2. Can I use this software for alternative purposes?
+    - This software is open-source under the Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license. As such you can use it for any personal/hobbyist/educational purpose as long as you credit the PART team.
+    - For prospective schools, we will provide the latest software and support the set up free of charge as part of our outlook.
+    - This software is not intended for commercial use. If you wish to use it commercially, please contact the PART team for licensing information.
+
+## Terms and Conditions
+By downloading, using or altering this software, you agree to the following terms and conditions:
+0. Definitions
+   - "You" refers to the end-user of this software.
+   - "This software" refers to the AH-Control application and any associated files, documentation, or resources provided by the PART team.
+1. You understand that this software is provided under the Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) license and agree to comply with its terms unless otherwise agreed in writing with the PART team.
+2. You acknowledge that this software is provided "as-is" without any guarantees or warranties of any kind, either expressed or implied.
+3. This software does not collect any personal data from users. However, for monitoring and quality control purposes, the PART team may ask for non-personal data collected and/or analysed with this software. You agree to provide such data upon request.
+4. To any extent permitted by applicable law, in no event shall the PART team be liable for any damages arising out of or in connection with the use or inability to use this software.
+5. These terms and conditions are governed by and construed in accordance with the laws of the jurisdiction in which the PART team operates, without regard to its conflict of law principles.
+6. If any provision of these terms and conditions is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary so that these terms and conditions shall otherwise remain in full force and effect.
+7. These terms and conditions constitute the entire agreement between you and the PART team regarding the use of this software and supersede any prior agreements or understandings, whether written or oral,.
+8. The PART team reserves the right to modify these terms and conditions at any time. Your continued use of the software after any such changes constitutes your acceptance of the new terms and conditions.
+
+--- NOTE ---
+Work in progress. As of the moment, only a basic GUI skeleton is implemented.

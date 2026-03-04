@@ -1,0 +1,7 @@
+numpy
+pyrtlsdr
+pyrtlsdrlib
+scipy
+matplotlib
+astropy
+geopy
