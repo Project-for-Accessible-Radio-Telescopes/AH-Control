@@ -5,6 +5,9 @@ Control application for the AccessHorizon series telescope design.
 ## What is it?
 A numpy, scipy, astropy and pysdr tkinter gui system to facilitate data collection using the AH series or NOOELEC/RTL-SDR based software defined radios.
 
+**This is a work in progress**
+![Shield: Work in progress][status-image]
+
 Shield: [![CC BY-NC 4.0][cc-by-nc-shield]][cc-by-nc]
 
 This work is licensed under a
@@ -12,6 +15,7 @@ This work is licensed under a
 
 [![CC BY-NC 4.0][cc-by-nc-image]][cc-by-nc]
 
+[status-image]: https://img.shields.io/badge/Status-Work%20in%20Progress-yellow.svg
 [cc-by-nc]: https://creativecommons.org/licenses/by-nc/4.0/
 [cc-by-nc-image]: https://licensebuttons.net/l/by-nc/4.0/88x31.png
 [cc-by-nc-shield]: https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg
@@ -20,7 +24,7 @@ This work is licensed under a
 1. I found a bug and/or the software is malfunctioning!
     - Please open an issue on GitHub or directly contact the PART team at inquiries.part@gmail.com for support.
     - If you are able to provide a fix, please submit a pull request on GitHub. We welcome and appreciate any contributions to the project.
-    - Note: this software is open-source and is intended as a charitable endeavour to support rural education and scientific outreach. All the time into the software is at the discretion of volunteers from the PART team. Considering this and all other administrative and logistical overheads, the software is provided "as-is" without any guarantees or warranties of any kind, either expressed or implied. Refer to the below [Terms and Conditions](#terms-and-conditions) and LICENCE for more details.
+    - Note: this software is open-source and is intended as a charitable endeavour to support rural education and scientific outreach. All the time into the software is at the discretion of volunteers from the PART team. Considering this and all other administrative and logistical overheads, the software is provided "as-is" without any guarantees or warranties of any kind, either expressed or implied. Refer to the below [Terms and Conditions](#terms-and-conditions) and [LICENCE](LICENCE) for more details.
 
 2. How do I set this up?
     - For prospective schools, we will provide, install and set up the software as a complementary service as part of our telescope deliveries and in-person workshops on the day. Contact [the PART team](mailto:inquiries.part@gmail.com) for more information.
@@ -44,6 +48,3 @@ Definitions
 6. If any provision of these terms and conditions is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary so that these terms and conditions shall otherwise remain in full force and effect.
 7. These terms and conditions constitute the entire agreement between you and the PART team regarding the use of this software and supersede any prior agreements or understandings, whether written or oral,.
 8. The PART team reserves the right to modify these terms and conditions at any time. Your continued use of the software after any such changes constitutes your acceptance of the new terms and conditions.
-
---- NOTE ---
-Work in progress. As of the moment, only a basic GUI skeleton is implemented.
