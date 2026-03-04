@@ -16,6 +16,7 @@ from tools.cmenu import CustomMenu
 from tools import cbuttons
 from tools.spreadsheet import SpreadsheetWindow
 from tools.popup import newPopup
+from tools.standardpopup import msgPopup
 
 from logic.local_info import obtain_local_info, compute_sidereal_time_and_hour_angle
 
@@ -142,7 +143,7 @@ class MainWindow:
         self.record_btn.configure(command=lambda: self.menu.show_menu(self.record_btn, [
             ("Begin Data Recording", self.start_recording_menu),
             ("Process Recordings", self.process_recordings_action),
-            ("Info", lambda: messagebox.showinfo("Record", "Configure and start a sample capture from the recording menu.")),
+            ("Info", lambda: msgPopup("Recording Tools", "Use the 'Begin Data Recording' option to capture data from a connected RTL-SDR device. Use the 'Process Recordings' option to process all existing recordings in the data/recordings directory and generate spectrograms and metadata in the processed subdirectory.")),
         ]))
 
     def _create_content(self, theme="light"):
@@ -359,7 +360,7 @@ class MainWindow:
             ttk.Button(
                 popup.win,
                 text="Retry Detection",
-                command=self.start_recording_menu,
+                command= lambda: (popup.win.destroy(), self.start_recording_menu()),
             ).pack(pady=8)
             self._append_log("Recording: no SDR device detected")
             return
