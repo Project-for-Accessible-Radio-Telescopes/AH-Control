@@ -1,4 +1,6 @@
-from tools.graphs.graphing import plot_basic_graph
+from tools.graphs.graphing import plot_basic_graph, plot_bar_graph, plot_scatter_graph
+from tools.standardpopup import msgPopup
+
 import tkinter as tk
 from tkinter import messagebox
 import re
@@ -10,7 +12,15 @@ class graphingWindow:
         self.data = data
         self.win = tk.Toplevel(self.root)
         self.win.title(f"Graph Data for {name}")
-        self.win.geometry("300x150")
+        self.win.geometry("300x300")
+
+        # selection of graph_type (scatter, line, etc.) added as a dropdown
+        self.graph_type = tk.StringVar(value="Line")
+        tk.Label(self.win, text="Graph Type:").pack(pady=(10, 0))
+        graph_type_menu = tk.OptionMenu(self.win, self.graph_type, "Line", "Scatter", "Bar")
+        graph_type_menu.pack(pady=(0, 10))
+        self.lobf = tk.BooleanVar(value=False)
+        tk.Checkbutton(self.win, text="Show Line of Best Fit (Scatter only)", variable=self.lobf).pack(pady=(0, 10))
 
         self.x_input = stdInput(self.win, prompt="X Data (e.g. 'Column A' or '1,2,3'):", pos=[10, 10])
 
@@ -141,14 +151,20 @@ class graphingWindow:
             if len(x) != len(y):
                 raise ValueError(f"X and Y lengths must match (got {len(x)} and {len(y)})")
 
-            plot_basic_graph(self.root, x, y, title=self.title_graph.get() or "Spreadsheet Graph",
-                             xlabel=self.xlabel_graph.get() or "X Data", ylabel=self.ylabel_graph.get() or "Y Data")
+            title = self.title_graph.get().strip() or "Graph"
+            xlabel = self.xlabel_graph.get().strip() or "X-axis"
+            ylabel = self.ylabel_graph.get().strip() or "Y-axis"
+
+            if self.graph_type.get() == "Line":
+                plot_basic_graph(self.root, x, y, title=title, xlabel=xlabel, ylabel=ylabel)
+            elif self.graph_type.get() == "Scatter":
+                plot_scatter_graph(self.root, x, y, title=title, xlabel=xlabel, ylabel=ylabel, lobf=self.lobf.get())
+            elif self.graph_type.get() == "Bar":
+                plot_bar_graph(self.root, x, y, title=title, xlabel=xlabel, ylabel=ylabel)
+            else:
+                raise ValueError(f"Unsupported graph type: {self.graph_type.get()}")
         except Exception as e:
-            messagebox.showerror(
-                "Graph Input Error",
-                "Use formats like 'Column A', 'Row 1', 'Column A:C', 'Row 1:3', or numeric list '1,2,3'.\n\n"
-                f"Details: {e}",
-            )
+            msgPopup("Graphing", f"Tip: Use formats like 'Column A', 'Row 1', 'Column A:C', 'Row 1:3', or numeric list '1,2,3'.\n\n{str(e)}", msgtype="error")
 
     def _index_to_col_label(self, index):
         if index < 0:
