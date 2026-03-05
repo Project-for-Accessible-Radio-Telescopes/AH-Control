@@ -2,6 +2,7 @@ import csv
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog, messagebox
+from logic.project_logic import graphingWindow
 
 
 class SpreadsheetWindow:
@@ -59,6 +60,8 @@ class SpreadsheetWindow:
         save_as_btn.pack(side="left", padx=4, pady=4)
         open_btn = ttk.Button(toolbar, text="Open...", command=self.open_file)
         open_btn.pack(side="left", padx=4, pady=4)
+        graph_btn = ttk.Button(toolbar, text="Graph", command=self._graph_data)
+        graph_btn.pack(side="left", padx=4, pady=4)
 
         # Use a canvas to allow scrolling for larger grids
         canvas = tk.Canvas(container)
@@ -243,3 +246,18 @@ class SpreadsheetWindow:
         ok = self._load_csv(path)
         if ok:
             messagebox.showinfo("Opened", f"Loaded {path}")
+    
+    def _graph_data(self):
+        # Pass a plain snapshot of cell values so the graph dialog can resolve
+        # row/column selectors without depending on widget internals.
+        data = []
+        for r in range(self.rows):
+            row_vals = []
+            for c in range(self.cols):
+                cell = self._cells.get((r, c))
+                row_vals.append(cell.get() if cell else "")
+            data.append(row_vals)
+
+        graphingWindow(self.win, name=f"Spreadsheet {self.index}", data=data)
+
+        
