@@ -149,3 +149,14 @@ class graphingWindow:
                 "Use formats like 'Column A', 'Row 1', 'Column A:C', 'Row 1:3', or numeric list '1,2,3'.\n\n"
                 f"Details: {e}",
             )
+
+    def _index_to_col_label(self, index):
+        if index < 0:
+            raise ValueError("Column index cannot be negative")
+
+        n = index + 1
+        label = ""
+        while n > 0:
+            n, rem = divmod(n - 1, 26)
+            label = chr(ord("A") + rem) + label
+        return label
