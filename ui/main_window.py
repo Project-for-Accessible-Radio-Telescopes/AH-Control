@@ -9,6 +9,7 @@ from datetime import datetime
 from tools.graphs.graphing import plot_basic_graph
 from ui.settings_window import SettingsWindow
 import webbrowser
+from logic.file_ext import build_session_payload, write_ahf_file, read_ahf_file
 
 import numpy as np
 from logic.sdr_processing import process_all_recordings
@@ -27,6 +28,7 @@ class MainWindow:
         self.root.geometry("500x300")
         self._rtlsdr_cls = None
         self._rtlsdr_import_error = None
+        self._spreadsheet_windows = []
 
         # Use CustomMenu manager for popup menus
         self.menu = CustomMenu(self.root)
@@ -119,8 +121,11 @@ class MainWindow:
         self.file_btn = cbuttons.make_button(self.menu_bar, text="File")
         self.file_btn.pack(side="left", padx=4)
         self.file_btn.configure(command=lambda: self.menu.show_menu(self.file_btn, [
-            ("New Project", self.on_new),
-            ("Open Project", self.on_open),
+            ("New Project", self.new_project),
+            ("Save Project", self.save_project),
+            ("Open Project", self.open_project),
+            ("New Spreadsheet", self.on_new),
+            ("Open Spreadsheet", self.on_open),
             ("Exit", self.root.quit),
         ]))
 
@@ -185,9 +190,9 @@ class MainWindow:
 
     # Example commands
     def on_new(self):
-        
         # Open a new spreadsheet window
-        SpreadsheetWindow(self.root)
+        sheet = SpreadsheetWindow(self.root)
+        self._spreadsheet_windows.append(sheet)
         self._append_log("New spreadsheet opened")
 
     def on_open(self):
@@ -197,8 +202,135 @@ class MainWindow:
         )
         if not filepath:
             return 
-        SpreadsheetWindow(self.root, file_path=filepath)
+        sheet = SpreadsheetWindow(self.root, file_path=filepath)
+        self._spreadsheet_windows.append(sheet)
         self._append_log("Spreadsheet opened")
+
+    def _active_spreadsheets(self):
+        active = []
+        for sheet in self._spreadsheet_windows:
+            try:
+                if hasattr(sheet, "win") and sheet.win.winfo_exists():
+                    active.append(sheet)
+            except Exception:
+                continue
+        self._spreadsheet_windows = active
+        return active
+
+    def _session_log_entries(self):
+        if not hasattr(self, "log_text"):
+            return []
+
+        try:
+            log_content = self.log_text.get("1.0", "end-1c")
+        except Exception:
+            return []
+
+        lines = [line for line in log_content.splitlines() if line.strip()]
+        return lines
+
+    def _clear_log(self):
+        if not hasattr(self, "log_text"):
+            return
+
+        try:
+            self.log_text.configure(state="normal")
+            self.log_text.delete("1.0", "end")
+            self.log_text.configure(state="disabled")
+        except Exception:
+            return
+
+    def _write_settings(self, settings):
+        os.makedirs("data", exist_ok=True)
+        with open("data/settings.json", "w", encoding="utf-8") as settings_file:
+            json.dump(settings, settings_file, indent=2)
+
+    def new_project(self):
+        should_continue = messagebox.askyesno(
+            "New Project",
+            "Start a new project session? This will close open spreadsheet windows and clear the log.",
+        )
+        if not should_continue:
+            return
+
+        for sheet in self._active_spreadsheets():
+            try:
+                sheet.win.destroy()
+            except Exception:
+                continue
+
+        self._spreadsheet_windows = []
+        self._clear_log()
+        self._append_log("Started a new project session")
+
+    def save_project(self):
+        project_path = filedialog.asksaveasfilename(
+            title="Save AH Project",
+            defaultextension=".ahf",
+            filetypes=[("AH Project Files", "*.ahf"), ("All Files", "*.*")],
+        )
+        if not project_path:
+            return
+
+        try:
+            open_sheet_paths = []
+            for sheet in self._active_spreadsheets():
+                path = getattr(sheet, "_saved_path", None)
+                if path:
+                    open_sheet_paths.append(path)
+
+            payload = build_session_payload(
+                settings=self._read_settings(),
+                log_entries=self._session_log_entries(),
+                spreadsheet_paths=open_sheet_paths,
+            )
+            written_path = write_ahf_file(project_path, payload)
+            messagebox.showinfo("Save Project", f"Project saved to\n{written_path}")
+            self._append_log(f"Project saved: {written_path}")
+        except Exception as error:
+            messagebox.showerror("Save Project", f"Could not save project:\n{error}")
+
+    def open_project(self):
+        project_path = filedialog.askopenfilename(
+            title="Open AH Project",
+            filetypes=[("AH Project Files", "*.ahf"), ("All Files", "*.*")],
+        )
+        if not project_path:
+            return
+
+        try:
+            payload = read_ahf_file(project_path)
+
+            saved_settings = payload.get("settings", {})
+            if saved_settings:
+                self._write_settings(saved_settings)
+                self.root.title(f"AH-Control v{saved_settings.get('version', '0.1.0')}")
+
+            for sheet in self._active_spreadsheets():
+                try:
+                    sheet.win.destroy()
+                except Exception:
+                    continue
+            self._spreadsheet_windows = []
+
+            for csv_path in payload.get("open_spreadsheets", []):
+                if not isinstance(csv_path, str) or not csv_path.strip():
+                    continue
+                if os.path.exists(csv_path):
+                    sheet = SpreadsheetWindow(self.root, file_path=csv_path)
+                    self._spreadsheet_windows.append(sheet)
+                else:
+                    self._append_log(f"Missing spreadsheet in project: {csv_path}")
+
+            self._clear_log()
+            for line in payload.get("log_entries", []):
+                if isinstance(line, str):
+                    self._append_log(line)
+
+            self._append_log(f"Project opened: {project_path}")
+            messagebox.showinfo("Open Project", f"Project loaded from\n{project_path}")
+        except Exception as error:
+            messagebox.showerror("Open Project", f"Could not open project:\n{error}")
 
     def on_about(self):
         settings = self._read_settings()
