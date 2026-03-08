@@ -39,11 +39,30 @@ class MainWindow:
 
         self._create_menu_bar(theme=settings.get("theme", "light"))
         self._create_content(theme=settings.get("theme", "light"))
-        self._bind_log_clear_handlers()
+        self._bind_log_selection_guards()
 
-    def _bind_log_clear_handlers(self):
-        self.root.bind_class("Button", "<Button-1>", self._clear_log_selection, add="+")
-        self.root.bind_class("TButton", "<Button-1>", self._clear_log_selection, add="+")
+    def _bind_log_selection_guards(self):
+        if not hasattr(self, "log_text"):
+            return
+
+        # Block mouse/keyboard selection shortcuts in the log view.
+        blocked_events = [
+            "<Button-1>",
+            "<B1-Motion>",
+            "<Double-Button-1>",
+            "<Triple-Button-1>",
+            "<Shift-Button-1>",
+            "<Control-a>",
+            "<Command-a>",
+            "<<SelectAll>>",
+        ]
+        for event_name in blocked_events:
+            self.log_text.bind(event_name, lambda _event: "break")
+
+        # Clear lingering selection when pointer/focus moves away from the log.
+        self.log_text.bind("<ButtonRelease-1>", self._clear_log_selection, add="+")
+        self.log_text.bind("<Leave>", self._clear_log_selection, add="+")
+        self.log_text.bind("<FocusOut>", self._clear_log_selection, add="+")
 
     def _clear_log_selection(self, _event=None):
         if not hasattr(self, "log_text"):
@@ -172,6 +191,8 @@ class MainWindow:
             font=("Menlo", 11),
             padx=8,
             pady=6,
+            takefocus=0,
+            exportselection=False,
         )
         self.log_scrollbar = ttk.Scrollbar(self.log_container, orient="vertical", command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=self.log_scrollbar.set)
@@ -186,6 +207,13 @@ class MainWindow:
     def _append_log(self, text):
         self.log_text.configure(state="normal")
         self.log_text.insert("end", f"{text}\n", "log_entry")
+
+        # Clear any active selection so new entries never remain highlighted.
+        self.log_text.tag_remove("sel", "1.0", "end")
+
+        # Force the viewport to the real bottom, including wrapped/overflow lines.
+        self.log_text.see("end")
+        self.log_text.yview_moveto(1.0)
         self.log_text.configure(state="disabled")
 
     # Example commands
