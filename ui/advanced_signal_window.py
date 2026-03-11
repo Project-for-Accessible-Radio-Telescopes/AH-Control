@@ -9,7 +9,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 
 from tools.popup import newPopup
 from logic.sdr_advanced import build_frequency_axis_mhz, extract_peak_metrics
-
+from tools.standardpopup import msgPopup
 
 class AdvancedSignalWindow:
     def __init__(self, root, source_file, analysis, sample_rate_hz, center_freq_hz, on_export=None):
@@ -43,14 +43,27 @@ class AdvancedSignalWindow:
 
         peak_metrics = extract_peak_metrics(self.averaged_psd_db, self.freq_axis_mhz)
         summary = (
-            f"File: {os.path.basename(self.source_file)} | "
-            f"Center: {self.center_freq_hz / 1e6:.6f} MHz | "
-            f"Rate: {self.sample_rate_hz / 1e6:.3f} MS/s | "
-            f"NFFT: {self.nfft} | Segments: {self.analysis['used_segments']} | "
-            f"Peak: {peak_metrics['peak_freq_mhz']:.6f} MHz ({peak_metrics['peak_power_db']:.1f} dB) | "
+            f"File: {os.path.basename(self.source_file)} \n"
+            f"Center: {self.center_freq_hz / 1e6:.6f} MHz \n"
+            f"Rate: {self.sample_rate_hz / 1e6:.3f} MS/s \n"
+            f"NFFT: {self.nfft} \n Segments: {self.analysis['used_segments']} \n "
+            f"Peak: {peak_metrics['peak_freq_mhz']:.6f} MHz ({peak_metrics['peak_power_db']:.1f} dB) \n"
             f"SNR: {peak_metrics['snr_db']:.1f} dB"
         )
-        ttk.Label(top_row, text=summary, anchor="w", justify="left").pack(fill="x")
+        # ttk.Label(top_row, text=summary, anchor="w", justify="left").pack(fill="x")
+        
+        self.aboveFrame = ttk.Frame(top_row)
+        self.aboveFrame.pack(side="left", fill="x", expand=True)
+
+        self.info_btn = ttk.Button(self.aboveFrame, text="Info Summary", command=lambda: msgPopup("File & Analysis Summary", summary, msgtype="info", size=(600, 300)).win)
+        self.info_btn.pack(side="left", padx=(0, 10))
+
+        ttk.Button(self.aboveFrame, text="Reset Zoom", command=self._reset_zoom).pack(side="left", padx=3)
+
+        export_btn = ttk.Button(self.aboveFrame, text="Export View", command=self._export_view)
+        export_btn.pack(side="left", padx=(10, 0))
+        
+        ttk.Button(self.aboveFrame, text="Close", command=self._close).pack(side="right", padx=(0, 6))
 
         controls = ttk.Frame(self.popup.win)
         controls.pack(fill="x", padx=10, pady=(0, 4))
@@ -85,12 +98,7 @@ class AdvancedSignalWindow:
 
         ttk.Button(controls, text="Apply", command=self._update_plot_style).pack(side="left", padx=3)
         ttk.Button(controls, text="Auto Range", command=self._auto_range).pack(side="left", padx=3)
-        ttk.Button(controls, text="Reset Zoom", command=self._reset_zoom).pack(side="left", padx=3)
-
-        export_btn = ttk.Button(controls, text="Export View", command=self._export_view)
-        export_btn.pack(side="right", padx=(10, 0))
-        ttk.Button(controls, text="Close", command=self._close).pack(side="right", padx=(0, 6))
-
+        
         self.toolbar_frame = ttk.Frame(self.popup.win)
         self.toolbar_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 6))
 
