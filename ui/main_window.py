@@ -5,14 +5,24 @@ from tkinter import filedialog
 import json
 import os
 import ctypes
+import re
+import threading
 from datetime import datetime
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from tools.graphs.graphing import plot_basic_graph
 from ui.settings_window import SettingsWindow
+from ui.advanced_signal_window import AdvancedSignalWindow
 import webbrowser
 from logic.file_ext import build_session_payload, write_ahf_file, read_ahf_file
 
 import numpy as np
 from logic.sdr_processing import process_all_recordings
+from logic.sdr_advanced import (
+    analyze_recording_for_advanced_view,
+    build_frequency_axis_mhz,
+    extract_peak_metrics,
+)
 
 from tools.cmenu import CustomMenu
 from tools import cbuttons
@@ -71,6 +81,42 @@ class MainWindow:
             self.log_text.tag_remove("sel", "1.0", "end")
         except Exception:
             return
+
+    def _run_in_background(self, work_fn, on_success=None, on_error=None, on_finally=None):
+        def runner():
+            try:
+                result = work_fn()
+                if on_success is not None:
+                    self.root.after(0, lambda: on_success(result))
+            except Exception as error:
+                if on_error is not None:
+                    self.root.after(0, lambda: on_error(error))
+            finally:
+                if on_finally is not None:
+                    self.root.after(0, on_finally)
+
+        threading.Thread(target=runner, daemon=True).start()
+
+    def _parse_float(self, raw_text, field_name):
+        text = str(raw_text).strip()
+        if not text:
+            raise ValueError(f"{field_name} is required")
+        try:
+            return float(text)
+        except ValueError as error:
+            raise ValueError(f"{field_name} must be a valid number") from error
+
+    def _validate_range(self, value, field_name, minimum=None, maximum=None):
+        if minimum is not None and value < minimum:
+            raise ValueError(f"{field_name} must be >= {minimum}")
+        if maximum is not None and value > maximum:
+            raise ValueError(f"{field_name} must be <= {maximum}")
+        return value
+
+    def _sanitize_output_tag(self, tag_text):
+        sanitized = re.sub(r"[^A-Za-z0-9_-]+", "_", str(tag_text).strip())
+        sanitized = sanitized.strip("_")
+        return sanitized or "capture"
 
     def _preload_rtlsdr_native_libraries(self):
         if os.name != "posix":
@@ -169,6 +215,7 @@ class MainWindow:
         self.record_btn.configure(command=lambda: self.menu.show_menu(self.record_btn, [
             ("Begin Data Recording", self.start_recording_menu),
             ("Process Recordings", self.process_recordings_action),
+            ("Advanced Signal View", self.advanced_signal_view_action),
             ("Info", lambda: msgPopup("Recording Tools", "Use the 'Begin Data Recording' option to capture data from a connected RTL-SDR device. Use the 'Process Recordings' option to process all existing recordings in the data/recordings directory and generate spectrograms and metadata in the processed subdirectory.")),
         ]))
 
@@ -492,6 +539,8 @@ class MainWindow:
         status_label = ttk.Label(popup.win, text="Ready")
         status_label.pack(pady=10)
 
+        widgets_to_disable = [device_selector, center_freq_entry, sample_rate_entry, gain_entry]
+
         def run_calibration():
             selected_label = device_selector.get()
             selected_device = next((d for d in devices if d["label"] == selected_label), None)
@@ -500,9 +549,37 @@ class MainWindow:
                 return
 
             try:
-                center_freq_hz = float(center_freq_entry.get().strip())
-                sample_rate_hz = float(sample_rate_entry.get().strip())
-                gain_db = float(gain_entry.get().strip())
+                center_freq_hz = self._validate_range(
+                    self._parse_float(center_freq_entry.get(), "Center Frequency"),
+                    "Center Frequency",
+                    minimum=1_000,
+                    maximum=3_000_000_000,
+                )
+                sample_rate_hz = self._validate_range(
+                    self._parse_float(sample_rate_entry.get(), "Sample Rate"),
+                    "Sample Rate",
+                    minimum=1_000,
+                    maximum=3_200_000,
+                )
+                gain_db = self._validate_range(
+                    self._parse_float(gain_entry.get(), "Gain"),
+                    "Gain",
+                    minimum=-10,
+                    maximum=60,
+                )
+            except ValueError as error:
+                messagebox.showerror("Calibration", str(error))
+                return
+
+            status_label.config(text="Calibrating...")
+            run_button.state(["disabled"])
+            for widget in widgets_to_disable:
+                try:
+                    widget.state(["disabled"])
+                except Exception:
+                    continue
+
+            def do_calibration():
                 samples = self._read_sdr_samples(
                     device_index=selected_device["index"],
                     center_freq_hz=center_freq_hz,
@@ -511,17 +588,29 @@ class MainWindow:
                     num_samples=262144,
                 )
                 avg_power = float(np.mean(np.abs(samples) ** 2))
-                status_text = f"Calibration OK | Avg power: {avg_power:.6f}"
-                status_label.config(text=status_text)
+                return avg_power
+
+            def on_success(avg_power):
+                status_label.config(text=f"Calibration OK | Avg power: {avg_power:.6f}")
                 self._append_log(f"Calibration complete: device {selected_device['index']}")
-            except ValueError:
-                messagebox.showerror("Calibration", "Invalid numeric parameters.")
-            except Exception as error:
+
+            def on_error(error):
                 messagebox.showerror("Calibration", f"Calibration failed: {error}")
                 status_label.config(text="Calibration failed")
                 self._append_log("Calibration failed")
 
-        ttk.Button(popup.win, text="Run Calibration", command=run_calibration).pack(pady=(2, 12))
+            def on_finally():
+                run_button.state(["!disabled"])
+                for widget in widgets_to_disable:
+                    try:
+                        widget.state(["!disabled"])
+                    except Exception:
+                        continue
+
+            self._run_in_background(do_calibration, on_success=on_success, on_error=on_error, on_finally=on_finally)
+
+        run_button = ttk.Button(popup.win, text="Run Calibration", command=run_calibration)
+        run_button.pack(pady=(2, 12))
         self._append_log("Calibration tool opened")
 
     def start_recording_menu(self):
@@ -575,6 +664,8 @@ class MainWindow:
         status_label = ttk.Label(popup.win, text="Ready")
         status_label.pack(pady=10)
 
+        entry_widgets = [device_selector, center_freq_entry, sample_rate_entry, gain_entry, duration_entry, output_tag_entry]
+
         def begin_recording():
             selected_label = device_selector.get()
             selected_device = next((d for d in devices if d["label"] == selected_label), None)
@@ -583,21 +674,69 @@ class MainWindow:
                 return
 
             try:
-                center_freq_hz = float(center_freq_entry.get().strip())
-                sample_rate_hz = float(sample_rate_entry.get().strip())
-                gain_db = float(gain_entry.get().strip())
-                duration_s = float(duration_entry.get().strip())
-                if duration_s <= 0:
-                    raise ValueError("Duration must be greater than 0")
+                center_freq_hz = self._validate_range(
+                    self._parse_float(center_freq_entry.get(), "Center Frequency"),
+                    "Center Frequency",
+                    minimum=1_000,
+                    maximum=3_000_000_000,
+                )
+                sample_rate_hz = self._validate_range(
+                    self._parse_float(sample_rate_entry.get(), "Sample Rate"),
+                    "Sample Rate",
+                    minimum=1_000,
+                    maximum=3_200_000,
+                )
+                gain_db = self._validate_range(
+                    self._parse_float(gain_entry.get(), "Gain"),
+                    "Gain",
+                    minimum=-10,
+                    maximum=60,
+                )
+                duration_s = self._validate_range(
+                    self._parse_float(duration_entry.get(), "Duration"),
+                    "Duration",
+                    minimum=0.1,
+                    maximum=120,
+                )
+                tag = self._sanitize_output_tag(output_tag_entry.get())
 
-                num_samples = int(sample_rate_hz * duration_s)
+                estimated_num_samples = int(sample_rate_hz * duration_s)
+                estimated_bytes = estimated_num_samples * 16
+                estimated_mb = estimated_bytes / (1024 * 1024)
+
+                should_continue = messagebox.askyesno(
+                    "Confirm Recording",
+                    (
+                        f"Device: {selected_device['label']}\n"
+                        f"Estimated samples: {estimated_num_samples:,}\n"
+                        f"Estimated memory use: {estimated_mb:.1f} MB\n\n"
+                        "Start recording now?"
+                    ),
+                )
+                if not should_continue:
+                    return
+
+                num_samples = estimated_num_samples
                 if num_samples > 2_500_000:
                     messagebox.showwarning(
                         "Record",
                         "Sample size was large. Limited capture to 2,500,000 samples for responsiveness.",
                     )
                     num_samples = 2_500_000
+            except ValueError as error:
+                messagebox.showerror("Record", str(error))
+                return
 
+            status_label.config(text="Recording in progress...")
+            start_button.state(["disabled"])
+            refresh_button.state(["disabled"])
+            for widget in entry_widgets:
+                try:
+                    widget.state(["disabled"])
+                except Exception:
+                    continue
+
+            def do_recording():
                 samples = self._read_sdr_samples(
                     device_index=selected_device["index"],
                     center_freq_hz=center_freq_hz,
@@ -610,7 +749,6 @@ class MainWindow:
                 os.makedirs(output_dir, exist_ok=True)
 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                tag = output_tag_entry.get().strip() or "capture"
                 base_name = f"{tag}_{timestamp}_dev{selected_device['index']}"
 
                 samples_path = os.path.join(output_dir, f"{base_name}.npy")
@@ -631,21 +769,43 @@ class MainWindow:
                 with open(metadata_path, "w", encoding="utf-8") as metadata_file:
                     json.dump(metadata, metadata_file, indent=2)
 
+                return {"samples_path": samples_path, "num_samples": num_samples}
+
+            def on_success(result):
+                samples_path = result["samples_path"]
+                captured_samples = result["num_samples"]
                 status_label.config(text=f"Saved: {samples_path}")
-                self._append_log(f"Recording saved ({num_samples} samples)")
+                self._append_log(f"Recording saved ({captured_samples} samples)")
                 messagebox.showinfo("Record", f"Recording saved to\n{samples_path}")
-            except ValueError:
-                messagebox.showerror("Record", "Invalid numeric parameters.")
-            except Exception as error:
+
+            def on_error(error):
                 messagebox.showerror("Record", f"Recording failed: {error}")
                 status_label.config(text="Recording failed")
                 self._append_log("Recording failed")
 
+            def on_finally():
+                start_button.state(["!disabled"])
+                refresh_button.state(["!disabled"])
+                for widget in entry_widgets:
+                    try:
+                        widget.state(["!disabled"])
+                    except Exception:
+                        continue
+
+            self._run_in_background(do_recording, on_success=on_success, on_error=on_error, on_finally=on_finally)
+
         controls = ttk.Frame(popup.win)
         controls.pack(pady=(2, 12))
 
-        ttk.Button(controls, text="Refresh Devices", command=self.start_recording_menu).pack(side="left", padx=6)
-        ttk.Button(controls, text="Start Recording", command=begin_recording).pack(side="left", padx=6)
+        refresh_button = ttk.Button(
+            controls,
+            text="Refresh Devices",
+            command=lambda: (popup.win.destroy(), self.start_recording_menu()),
+        )
+        refresh_button.pack(side="left", padx=6)
+
+        start_button = ttk.Button(controls, text="Start Recording", command=begin_recording)
+        start_button.pack(side="left", padx=6)
 
         self._append_log("Recording setup opened")
 
@@ -683,6 +843,131 @@ class MainWindow:
         except Exception as error:
             messagebox.showerror("Process Recordings", f"Processing failed: {error}")
             self._append_log("Processing failed")
+
+    def _open_static_advanced_signal_view_popup(self, source_file, analysis, sample_rate_hz, center_freq_hz):
+        popup = newPopup(self.root, name="Advanced Signal View", geometry="980x700")
+
+        top_row = ttk.Frame(popup.win)
+        top_row.pack(fill="x", padx=10, pady=(8, 4))
+
+        averaged_psd_db = analysis["averaged_psd_db"]
+        waterfall_db = analysis["waterfall_db"]
+        freq_axis_mhz = build_frequency_axis_mhz(analysis["nfft"], sample_rate_hz, center_freq_hz)
+        peak_metrics = extract_peak_metrics(averaged_psd_db, freq_axis_mhz)
+
+        summary = (
+            f"File: {os.path.basename(source_file)} | "
+            f"Center: {center_freq_hz / 1e6:.6f} MHz | "
+            f"Rate: {sample_rate_hz / 1e6:.3f} MS/s | "
+            f"NFFT: {analysis['nfft']} | Segments: {analysis['used_segments']} | "
+            f"Peak: {peak_metrics['peak_freq_mhz']:.6f} MHz ({peak_metrics['peak_power_db']:.1f} dB) | "
+            f"SNR: {peak_metrics['snr_db']:.1f} dB"
+        )
+        ttk.Label(top_row, text=summary, justify="left", anchor="w").pack(fill="x")
+
+        fig, axes = plt.subplots(2, 1, figsize=(10, 6.5), dpi=100)
+        ax_spectrum, ax_waterfall = axes
+
+        ax_spectrum.plot(freq_axis_mhz, averaged_psd_db, color="#0b7285", linewidth=1.1)
+        ax_spectrum.set_title("Average Spectrum (FFT)")
+        ax_spectrum.set_xlabel("Frequency (MHz)")
+        ax_spectrum.set_ylabel("Power (dB)")
+        ax_spectrum.grid(alpha=0.25)
+
+        time_axis_s = (np.arange(waterfall_db.shape[0]) * analysis["nfft"]) / max(sample_rate_hz, 1.0)
+        image = ax_waterfall.imshow(
+            waterfall_db,
+            aspect="auto",
+            origin="lower",
+            extent=[freq_axis_mhz[0], freq_axis_mhz[-1], time_axis_s[0], time_axis_s[-1] if time_axis_s.size else 0],
+            cmap="magma",
+        )
+        ax_waterfall.set_title("Waterfall")
+        ax_waterfall.set_xlabel("Frequency (MHz)")
+        ax_waterfall.set_ylabel("Time (s)")
+        fig.colorbar(image, ax=ax_waterfall, label="Power (dB)")
+        fig.tight_layout(rect=[0, 0.04, 1, 0.95])
+
+        toolbar_frame = ttk.Frame(popup.win)
+        toolbar_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 6))
+
+        canvas = FigureCanvasTkAgg(fig, master=popup.win)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=(4, 0))
+
+        toolbar = NavigationToolbar2Tk(canvas, toolbar_frame, pack_toolbar=False)
+        toolbar.update()
+        toolbar.pack(side="left", fill="x")
+
+        close_btn = ttk.Button(toolbar_frame, text="Close", command=lambda: (plt.close(fig), popup.win.destroy()))
+        close_btn.pack(side="right")
+        popup.win.protocol("WM_DELETE_WINDOW", lambda: (plt.close(fig), popup.win.destroy()))
+
+    def _open_interactive_advanced_signal_view_window(self, source_file, analysis, sample_rate_hz, center_freq_hz):
+        AdvancedSignalWindow(
+            root=self.root,
+            source_file=source_file,
+            analysis=analysis,
+            sample_rate_hz=sample_rate_hz,
+            center_freq_hz=center_freq_hz,
+            on_export=self._open_static_advanced_signal_view_popup,
+        )
+
+    def advanced_signal_view_action(self):
+        default_dir = os.path.join("data", "recordings")
+        samples_path = filedialog.askopenfilename(
+            title="Open Recording for Advanced View",
+            initialdir=default_dir if os.path.isdir(default_dir) else None,
+            filetypes=[("NumPy Recording", "*.npy"), ("All Files", "*.*")],
+        )
+
+        if not samples_path:
+            return
+
+        status_popup = newPopup(self.root, name="Advanced Signal View", geometry="380x120")
+        ttk.Label(status_popup.win, text="Analyzing recording...", anchor="center").pack(fill="x", padx=12, pady=(16, 6))
+        ttk.Label(status_popup.win, text=os.path.basename(samples_path), anchor="center").pack(fill="x", padx=12, pady=(0, 12))
+
+        def analyze_recording():
+            return analyze_recording_for_advanced_view(
+                samples_path=samples_path,
+                nfft=4096,
+                max_segments=350,
+                max_preview_samples=8_000_000,
+            )
+
+        def on_success(result):
+            try:
+                status_popup.win.destroy()
+            except Exception:
+                pass
+
+            self._open_interactive_advanced_signal_view_window(
+                source_file=samples_path,
+                analysis=result["analysis"],
+                sample_rate_hz=result["sample_rate_hz"],
+                center_freq_hz=result["center_freq_hz"],
+            )
+
+            if not result["metadata_found"]:
+                messagebox.showwarning(
+                    "Advanced Signal View",
+                    "Metadata file was not found. Using default sample rate and center frequency.",
+                )
+            if result["truncated"]:
+                self._append_log("Advanced view used the first 8,000,000 samples for performance")
+
+            self._append_log(f"Advanced signal view opened: {os.path.basename(samples_path)}")
+
+        def on_error(error):
+            try:
+                status_popup.win.destroy()
+            except Exception:
+                pass
+            messagebox.showerror("Advanced Signal View", f"Could not analyze recording:\n{error}")
+            self._append_log("Advanced signal view failed")
+
+        self._run_in_background(analyze_recording, on_success=on_success, on_error=on_error)
     
     def _read_settings(self):
         try:

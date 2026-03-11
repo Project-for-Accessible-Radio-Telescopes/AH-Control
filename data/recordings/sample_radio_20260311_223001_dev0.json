@@ -1,0 +1,12 @@
+{
+  "device_index": 0,
+  "serial": "simulated",
+  "center_freq_hz": 100000000.0,
+  "sample_rate_hz": 2048000.0,
+  "gain_db": 20.0,
+  "duration_s": 2.0,
+  "num_samples": 4096000,
+  "saved_samples_file": "data/recordings/sample_radio_20260311_223001_dev0.npy",
+  "created_at": "20260311_223001",
+  "source": "synthetic_test_data"
+}
