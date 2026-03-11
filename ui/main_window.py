@@ -194,7 +194,18 @@ class MainWindow:
             takefocus=0,
             exportselection=False,
         )
-        self.log_scrollbar = ttk.Scrollbar(self.log_container, orient="vertical", command=self.log_text.yview)
+        # Use a classic Tk scrollbar with explicit styling so it remains clearly visible.
+        self.log_scrollbar = tk.Scrollbar(
+            self.log_container,
+            orient="vertical",
+            command=self.log_text.yview,
+            width=14,
+            bg="#d9d9d9",
+            activebackground="#bfbfbf",
+            troughcolor="#f2f2f2",
+            relief="sunken",
+            borderwidth=1,
+        )
         self.log_text.configure(yscrollcommand=self.log_scrollbar.set)
         self.log_text.tag_configure("log_entry", spacing1=2, spacing2=1, spacing3=10)
 
@@ -363,7 +374,14 @@ class MainWindow:
     def on_about(self):
         settings = self._read_settings()
         version = settings.get("version", "0.1.0")
-        self._append_log(f"Welcome to AH Control v{version}! This application is intended to be a simple data collection and analysis tool to complement the PART Access Horizon telescope, but it can be used with any RTL-SDR device. To get started, connect your RTL-SDR that is linked to your antenna to this device and use the 'Record' menu to capture data. Use the 'Tools' menu for calibration and settings. If you want to load an existing project, or create a new one to save your data, click on the 'File' menu. Settings can be changed under tools. For further documentation, visit the Help menu. Happy exploring! - The PART Team")
+        self.help_popup = msgPopup(
+            title="About AH-Control",
+            message=(
+                f"Welcome to AH Control v{version}! This application is intended to be a simple data collection and analysis tool to complement the PART Access Horizon telescope, but it can be used with any RTL-SDR device. To get started, connect your RTL-SDR that is linked to your antenna to this device and use the 'Record' menu to capture data. Use the 'Tools' menu for calibration and settings. If you want to load an existing project, or create a new one to save your data, click on the 'File' menu. Settings can be changed under tools. For further documentation, visit the Help menu. Happy exploring! - The PART Team"
+                ),
+                size=(450, 300),
+                msgtype="info"
+        )
 
     def _detect_rtl_sdr_devices(self):
         rtlsdr_class = self._get_rtlsdr_class()
