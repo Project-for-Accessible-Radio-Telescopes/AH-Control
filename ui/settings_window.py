@@ -13,23 +13,31 @@ class SettingsWindow:
 
         self.window = tk.Toplevel(self.root)
         self.window.title("AH-Control | Settings")
-        self.window.geometry("560x460")
+        self.window.geometry("620x520")
+        self.window.minsize(560, 420)
+        self.window.transient(self.root)
+        self.window.lift()
+        self.window.focus_force()
+        self.window.bind("<Command-s>", lambda _e: self.on_save())
+        self.window.bind("<Control-s>", lambda _e: self.on_save())
 
         self._build_ui()
 
     def _build_ui(self):
         container = ttk.Frame(self.window, padding=12)
         container.pack(fill="both", expand=True)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(2, weight=1)
 
-        ttk.Label(container, text="Settings", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
+        ttk.Label(container, text="Settings", font=("TkDefaultFont", 10, "bold")).grid(row=0, column=0, sticky="w")
         ttk.Label(
             container,
             text="Adjust visual preferences and advanced SDR behavior.",
             justify="left",
-        ).pack(anchor="w", pady=(4, 8))
+        ).grid(row=1, column=0, sticky="w", pady=(4, 8))
 
         notebook = ttk.Notebook(container)
-        notebook.pack(fill="both", expand=True)
+        notebook.grid(row=2, column=0, sticky="nsew")
 
         style_tab = ttk.Frame(notebook, padding=10)
         advanced_tab = ttk.Frame(notebook, padding=10)
@@ -59,7 +67,7 @@ class SettingsWindow:
         self._build_advanced_tab(advanced_tab)
 
         actions = ttk.Frame(container)
-        actions.pack(fill="x", pady=(10, 0))
+        actions.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         ttk.Button(actions, text="Close", command=self.window.destroy).pack(side="right")
         ttk.Button(actions, text="Save", command=self.on_save).pack(side="right", padx=(0, 6))
 
@@ -103,18 +111,18 @@ class SettingsWindow:
     def _collect_settings(self):
         return {
             "theme": self.theme_var.get(),
-            "font_size": int(self.font_size_var.get()),
-            "capture_default_sample_rate_hz": float(self.sample_rate_var.get()),
-            "capture_default_center_freq_hz": float(self.center_freq_var.get()),
-            "capture_default_gain_db": float(self.gain_var.get()),
-            "capture_default_duration_s": float(self.record_duration_var.get()),
-            "capture_sample_cap": int(self.capture_cap_var.get()),
-            "analysis_nfft": int(self.analysis_nfft_var.get()),
-            "analysis_max_segments": int(self.analysis_segments_var.get()),
-            "analysis_max_preview_samples": int(self.analysis_preview_var.get()),
-            "quick_check_default_duration_s": float(self.quick_default_duration_var.get()),
-            "quick_check_max_duration_s": float(self.quick_max_duration_var.get()),
-            "network_timeout_s": int(self.network_timeout_var.get()),
+            "font_size": self.font_size_var.get(),
+            "capture_default_sample_rate_hz": self.sample_rate_var.get(),
+            "capture_default_center_freq_hz": self.center_freq_var.get(),
+            "capture_default_gain_db": self.gain_var.get(),
+            "capture_default_duration_s": self.record_duration_var.get(),
+            "capture_sample_cap": self.capture_cap_var.get(),
+            "analysis_nfft": self.analysis_nfft_var.get(),
+            "analysis_max_segments": self.analysis_segments_var.get(),
+            "analysis_max_preview_samples": self.analysis_preview_var.get(),
+            "quick_check_default_duration_s": self.quick_default_duration_var.get(),
+            "quick_check_max_duration_s": self.quick_max_duration_var.get(),
+            "network_timeout_s": self.network_timeout_var.get(),
             "local_info_use_ip_fallback": bool(self.ip_fallback_var.get()),
             "language": self.settings.get("language", "en"),
             "version": self.settings.get("version", "0.1.0"),

@@ -337,21 +337,88 @@ class MainWindow:
         self.settings = save_settings_file(settings, settings_path="data/settings.json")
 
     def _apply_runtime_settings(self):
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
         theme = self.settings.get("theme", "light")
+        if hasattr(self, "menu") and self.menu is not None:
+            self.menu.set_theme(theme)
+
         if theme == "dark":
             self.root.configure(bg="#333333")
+            menu_bg = "#555555"
+            menu_fg = "#aaaaaa"
+            btn_bg = "#666666"
+            btn_fg = "#f1f1f1"
+            btn_active = "#7a7a7a"
             log_bg = "#1f1f1f"
             log_fg = "#f1f1f1"
             insert_bg = "#f1f1f1"
+
+            style.configure(".", background="#333333", foreground="#f1f1f1")
+            style.configure("TFrame", background="#333333")
+            style.configure("TLabel", background="#333333", foreground="#f1f1f1")
+            style.configure("TButton", background="#505050", foreground="#f1f1f1")
+            style.map("TButton", background=[("active", "#666666")])
+            style.configure("TCheckbutton", background="#333333", foreground="#f1f1f1")
+            style.configure("TNotebook", background="#333333")
+            style.configure("TNotebook.Tab", background="#505050", foreground="#f1f1f1")
+            style.map("TNotebook.Tab", background=[("selected", "#6b6b6b")])
+            style.configure("TEntry", fieldbackground="#2c2c2c", foreground="#f1f1f1")
+            style.configure("TCombobox", fieldbackground="#2c2c2c", foreground="#f1f1f1", background="#505050")
+            style.map("TCombobox", fieldbackground=[("readonly", "#2c2c2c")], foreground=[("readonly", "#f1f1f1")])
+            style.configure("TSpinbox", fieldbackground="#2c2c2c", foreground="#f1f1f1")
+            style.configure("TopMenu.TButton", background=btn_bg, foreground=btn_fg, padding=(8, 3), relief="flat")
+            style.map("TopMenu.TButton", background=[("active", btn_active)], foreground=[("active", btn_fg)])
         else:
             self.root.configure(bg="#ffffff")
+            menu_bg = "#eeeeee"
+            menu_fg = "#cccccc"
+            btn_bg = "#f2f2f2"
+            btn_fg = "#111111"
+            btn_active = "#e0e0e0"
             log_bg = "#ffffff"
             log_fg = "#111111"
             insert_bg = "#111111"
 
+            style.configure(".", background="#ffffff", foreground="#111111")
+            style.configure("TFrame", background="#ffffff")
+            style.configure("TLabel", background="#ffffff", foreground="#111111")
+            style.configure("TButton", background="#f2f2f2", foreground="#111111")
+            style.map("TButton", background=[("active", "#e0e0e0")])
+            style.configure("TCheckbutton", background="#ffffff", foreground="#111111")
+            style.configure("TNotebook", background="#ffffff")
+            style.configure("TNotebook.Tab", background="#f2f2f2", foreground="#111111")
+            style.map("TNotebook.Tab", background=[("selected", "#e0e0e0")])
+            style.configure("TEntry", fieldbackground="#ffffff", foreground="#111111")
+            style.configure("TCombobox", fieldbackground="#ffffff", foreground="#111111", background="#f2f2f2")
+            style.map("TCombobox", fieldbackground=[("readonly", "#ffffff")], foreground=[("readonly", "#111111")])
+            style.configure("TSpinbox", fieldbackground="#ffffff", foreground="#111111")
+            style.configure("TopMenu.TButton", background=btn_bg, foreground=btn_fg, padding=(8, 3), relief="flat")
+            style.map("TopMenu.TButton", background=[("active", btn_active)], foreground=[("active", btn_fg)])
+
+        if hasattr(self, "menu_bar"):
+            self.menu_bar.configure(bg=menu_bg)
+        if hasattr(self, "_menu_divider"):
+            self._menu_divider.configure(bg=menu_fg)
+
+        for button_name in ["file_btn", "help_btn", "tools_btn", "record_btn"]:
+            btn = getattr(self, button_name, None)
+            if btn is not None:
+                btn.configure(style="TopMenu.TButton")
+
         if hasattr(self, "log_text"):
             font_size = int(self.settings.get("font_size", 10))
             self.log_text.configure(font=("TkDefaultFont", font_size), bg=log_bg, fg=log_fg, insertbackground=insert_bg)
+
+        if hasattr(self, "log_scrollbar"):
+            if theme == "dark":
+                self.log_scrollbar.configure(bg="#5c5c5c", activebackground="#787878", troughcolor="#2a2a2a")
+            else:
+                self.log_scrollbar.configure(bg="#d9d9d9", activebackground="#bfbfbf", troughcolor="#f2f2f2")
 
     def new_project(self):
         should_continue = messagebox.askyesno(

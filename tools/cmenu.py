@@ -13,10 +13,33 @@ class CustomMenu:
         self.root = root
         self.open_menu = None
         self.open_button = None
+        self._theme = "light"
+        self._palette = self._build_palette(self._theme)
 
         # Global handlers
         self.root.bind_all("<Button-1>", self._global_click, add="+")
         self.root.bind_all("<Escape>", lambda e: self.close_menu(), add="+")
+
+    def _build_palette(self, theme):
+        if theme == "dark":
+            return {
+                "border": "#666666",
+                "menu_bg": "#3a3a3a",
+                "item_bg": "#3a3a3a",
+                "item_fg": "#f1f1f1",
+                "item_hover": "#4a4a4a",
+            }
+        return {
+            "border": "#cccccc",
+            "menu_bg": "#eeeeee",
+            "item_bg": "#eeeeee",
+            "item_fg": "#111111",
+            "item_hover": "#e0e0e0",
+        }
+
+    def set_theme(self, theme):
+        self._theme = "dark" if str(theme).lower() == "dark" else "light"
+        self._palette = self._build_palette(self._theme)
 
     def _create_menu_toplevel(self, items):
         top = tk.Toplevel(self.root)
@@ -25,12 +48,12 @@ class CustomMenu:
         top.transient(self.root)
         top.attributes("-topmost", True)
 
-        # Use `#cccccc` as the visible border color and `#eeeeee` as the menu background
-        outer = tk.Frame(top, bd=0, bg="#cccccc")
+        palette = self._palette
+
+        outer = tk.Frame(top, bd=0, bg=palette["border"])
         outer.pack(fill="both", expand=True)
 
-        # Inner content holds the items and shows the `#eeeeee` background
-        content = tk.Frame(outer, bd=0, bg="#eeeeee")
+        content = tk.Frame(outer, bd=0, bg=palette["menu_bg"])
         content.pack(padx=1, pady=1, fill="both", expand=True)
 
         for text, cmd in items:
@@ -38,10 +61,8 @@ class CustomMenu:
                 content,
                 text=text,
                 anchor="w",
-                bg="#eeeeee",
-                fg="black",  # Add foreground color for text
-                activebackground="#e0e0e0",
-                activeforeground="#cccccc",
+                bg=palette["item_bg"],
+                fg=palette["item_fg"],
                 font=("TkDefaultFont", 10),  # Use default font
                 padx=2,
                 pady=2,
@@ -53,9 +74,8 @@ class CustomMenu:
             # Bind click event
             b.bind("<Button-1>", lambda e, c=cmd: self._menu_action(c))
 
-            # Simple hover: slightly darker gray on hover
-            b.bind("<Enter>", lambda e, w=b: w.configure(bg="#e0e0e0"))
-            b.bind("<Leave>", lambda e, w=b: w.configure(bg="#eeeeee"))
+            b.bind("<Enter>", lambda e, w=b: w.configure(bg=palette["item_hover"]))
+            b.bind("<Leave>", lambda e, w=b: w.configure(bg=palette["item_bg"]))
 
         return top
 
