@@ -403,14 +403,18 @@ class MainWindow:
                     continue
             self._spreadsheet_windows = []
 
+            restored_count = 0
+            missing_count = 0
             for csv_path in payload.get("open_spreadsheets", []):
                 if not isinstance(csv_path, str) or not csv_path.strip():
                     continue
                 if os.path.exists(csv_path):
                     sheet = SpreadsheetWindow(self.root, file_path=csv_path)
                     self._spreadsheet_windows.append(sheet)
+                    restored_count += 1
                 else:
                     self._append_log(f"Missing spreadsheet in project: {csv_path}")
+                    missing_count += 1
 
             self._clear_log()
             for line in payload.get("log_entries", []):
@@ -418,7 +422,14 @@ class MainWindow:
                     self._append_log(line)
 
             self._append_log(f"Project opened: {project_path}")
-            messagebox.showinfo("Open Project", f"Project loaded from\n{project_path}")
+            messagebox.showinfo(
+                "Open Project",
+                (
+                    f"Project loaded from\n{project_path}\n\n"
+                    f"Spreadsheets restored: {restored_count}\n"
+                    f"Spreadsheets missing: {missing_count}"
+                ),
+            )
         except Exception as error:
             messagebox.showerror("Open Project", f"Could not open project:\n{error}")
 
