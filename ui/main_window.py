@@ -13,6 +13,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from tools.graphs.graphing import plot_basic_graph
 from ui.settings_window import SettingsWindow
 from ui.advanced_signal_window import AdvancedSignalWindow
+from ui.health_diagnostics_window import HealthDiagnosticsWindow
 import webbrowser
 from logic.file_ext import build_session_payload, write_ahf_file, read_ahf_file
 
@@ -206,6 +207,7 @@ class MainWindow:
         self.tools_btn.pack(side="left", padx=4)
         self.tools_btn.configure(command=lambda: self.menu.show_menu(self.tools_btn, [
             ("Calibration", self.calibration_tool),
+            ("Health Diagnostics", self.health_diagnostics_action),
             ("Settings", self.settings_tool),
             ("Local Information", lambda: self.obtain_local_info()),
             ("Create Sample Graph", lambda: plot_basic_graph(self.root, x=[1, 2, 3], y=[1, 4, 9], title="Sample Graph", xlabel="X", ylabel="Y")),
@@ -614,6 +616,21 @@ class MainWindow:
         run_button = ttk.Button(popup.win, text="Run Calibration", command=run_calibration)
         run_button.pack(pady=(2, 12))
         self._append_log("Calibration tool opened")
+
+    def health_diagnostics_action(self):
+        if self._get_rtlsdr_class() is None:
+            self._show_rtlsdr_dependency_error()
+            self._append_log("Health diagnostics unavailable: missing RTL-SDR dependency")
+            return
+
+        HealthDiagnosticsWindow(
+            root=self.root,
+            detect_devices_fn=self._detect_rtl_sdr_devices,
+            read_samples_fn=self._read_sdr_samples,
+            run_in_background_fn=self._run_in_background,
+            append_log_fn=self._append_log,
+        )
+        self._append_log("Health diagnostics opened")
 
     def start_recording_menu(self):
         if self._get_rtlsdr_class() is None:
