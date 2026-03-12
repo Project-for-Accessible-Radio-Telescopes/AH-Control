@@ -131,3 +131,8 @@ tokens.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Prevent large data files 
+*.csv
+*.npy
+sample_data/

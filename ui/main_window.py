@@ -31,6 +31,7 @@ from tools.popup import newPopup
 from tools.standardpopup import msgPopup
 
 from logic.local_info import obtain_local_info, compute_sidereal_time_and_hour_angle
+from logic.recording_metadata import save_samples_and_metadata
 
 class MainWindow:
     def __init__(self, root):
@@ -208,6 +209,7 @@ class MainWindow:
             ("Settings", self.settings_tool),
             ("Local Information", lambda: self.obtain_local_info()),
             ("Create Sample Graph", lambda: plot_basic_graph(self.root, x=[1, 2, 3], y=[1, 4, 9], title="Sample Graph", xlabel="X", ylabel="Y")),
+            ("Create Sample Data", lambda: self.create_sample_data()),
         ]))
 
         self.record_btn = cbuttons.make_button(self.menu_bar, text="Record")
@@ -745,31 +747,22 @@ class MainWindow:
                     num_samples=num_samples,
                 )
 
-                output_dir = os.path.join("data", "recordings")
-                os.makedirs(output_dir, exist_ok=True)
-
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                base_name = f"{tag}_{timestamp}_dev{selected_device['index']}"
-
-                samples_path = os.path.join(output_dir, f"{base_name}.npy")
-                metadata_path = os.path.join(output_dir, f"{base_name}.json")
-
-                np.save(samples_path, samples)
-                metadata = {
-                    "device_index": selected_device["index"],
-                    "serial": selected_device["serial"],
-                    "center_freq_hz": center_freq_hz,
-                    "sample_rate_hz": sample_rate_hz,
-                    "gain_db": gain_db,
-                    "duration_s": duration_s,
-                    "num_samples": int(num_samples),
-                    "saved_samples_file": samples_path,
-                    "created_at": timestamp,
+                result = save_samples_and_metadata(
+                    samples=samples,
+                    output_dir=os.path.join("data", "recordings"),
+                    tag=tag,
+                    device_index=selected_device["index"],
+                    serial=selected_device["serial"],
+                    center_freq_hz=center_freq_hz,
+                    sample_rate_hz=sample_rate_hz,
+                    gain_db=gain_db,
+                    duration_s=duration_s,
+                    num_samples=num_samples,
+                )
+                return {
+                    "samples_path": result["samples_path"],
+                    "num_samples": result["num_samples"],
                 }
-                with open(metadata_path, "w", encoding="utf-8") as metadata_file:
-                    json.dump(metadata, metadata_file, indent=2)
-
-                return {"samples_path": samples_path, "num_samples": num_samples}
 
             def on_success(result):
                 samples_path = result["samples_path"]
@@ -1047,3 +1040,93 @@ class MainWindow:
             json.dump(local_info, f, indent=2)
 
         messagebox.showinfo("Save Local Information", f"Local information saved to\n{output_path}")
+
+    def create_sample_data(self):
+        output_dir = "data/sample_data"
+        os.makedirs(output_dir, exist_ok=True)
+
+        self.input_window = newPopup(self.root, name="Create Sample Data", geometry="400x200")
+        ttk.Label(self.input_window.win, text="This will create a synthetic sample data file with two tones and noise.").pack(pady=(20, 10))
+        
+        self.sample_rate_entry = ttk.Entry(self.input_window.win)
+        self.sample_rate_entry.insert(0, "2048000")
+        ttk.Label(self.input_window.win, text="Sample Rate (Hz)").pack(pady=(10, 2))
+        self.sample_rate_entry.pack(fill="x", padx=12)
+
+        self.duration_entry = ttk.Entry(self.input_window.win)
+        self.duration_entry.insert(0, "5")
+        ttk.Label(self.input_window.win, text="Duration (seconds)").pack(pady=(10, 2))
+        self.duration_entry.pack(fill="x", padx=12)
+
+        def generate_data():
+            try:
+                sample_rate_hz = self._validate_range(
+                    self._parse_float(self.sample_rate_entry.get(), "Sample Rate"),
+                    "Sample Rate",
+                    minimum=1_000,
+                    maximum=3_200_000,
+                )
+                duration_s = self._validate_range(
+                    self._parse_float(self.duration_entry.get(), "Duration"),
+                    "Duration",
+                    minimum=0.1,
+                    maximum=120,
+                )
+
+                num_samples = int(sample_rate_hz * duration_s)
+                time_axis = np.arange(num_samples) / sample_rate_hz
+
+                tone1_freq = 100e3
+                tone2_freq = 300e3
+                tone1 = 0.5 * np.exp(2j * np.pi * tone1_freq * time_axis)
+                tone2 = 0.5 * np.exp(2j * np.pi * tone2_freq * time_axis)
+
+                noise = 0.05 * (np.random.randn(num_samples) + 1j * np.random.randn(num_samples))
+
+                samples = tone1 + tone2 + noise
+
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = os.path.join(output_dir, f"synthetic_sample_{timestamp}.npy")
+                np.save(output_path, samples)
+
+                meta_data = {
+                    "sample_rate_hz": sample_rate_hz,
+                    "center_freq_hz": 100_000_000.0,
+                    "duration_s": duration_s,
+                    "num_samples": num_samples,
+                    "tone1_freq_hz": tone1_freq,
+                    "tone2_freq_hz": tone2_freq,
+                    "noise_power": 0.05,
+                    "created_at": timestamp,
+                }
+
+                # Save paired metadata next to the .npy file and keep legacy naming for compatibility.
+                meta_output_path = os.path.join(output_dir, f"synthetic_sample_{timestamp}.json")
+                with open(meta_output_path, "w", encoding="utf-8") as meta_file:
+                    json.dump(meta_data, meta_file, indent=2)
+
+                legacy_meta_output_path = os.path.join(output_dir, f"synthetic_sample_{timestamp}_metadata.json")
+                with open(legacy_meta_output_path, "w", encoding="utf-8") as legacy_meta_file:
+                    json.dump(meta_data, legacy_meta_file, indent=2)
+
+                self.successwindow = msgPopup(
+                    title="Sample Data Created",
+                    message=f"Synthetic sample data created: {output_path}"
+                )
+
+                self._append_log(f"Synthetic sample data created: {output_path}")
+            except ValueError as error:
+                self.errorWindow = msgPopup(
+                    title="Invalid Input",
+                    message=str(error),
+                    msgtype="error"
+                )
+            except Exception as error:
+                self.errorWindow = msgPopup(
+                    title="Create Sample Data",
+                    message=f"Failed to create sample data: {error}",
+                    msgtype="error"
+                )
+        
+        generate_btn = ttk.Button(self.input_window.win, text="Generate Sample Data", command=generate_data)
+        generate_btn.pack(pady=12)

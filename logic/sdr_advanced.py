@@ -8,6 +8,18 @@ DEFAULT_SAMPLE_RATE_HZ = 2_048_000.0
 DEFAULT_CENTER_FREQ_HZ = 100_000_000.0
 
 
+def _find_metadata_path(samples_path):
+    stem = os.path.splitext(samples_path)[0]
+    candidates = [
+        stem + ".json",
+        stem + "_metadata.json",
+    ]
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def build_frequency_axis_mhz(nfft, sample_rate_hz, center_freq_hz):
     frequency_axis_hz = np.linspace(
         center_freq_hz - sample_rate_hz / 2.0,
@@ -76,10 +88,10 @@ def extract_peak_metrics(averaged_psd_db, freq_axis_mhz):
 
 
 def analyze_recording_for_advanced_view(samples_path, nfft=4096, max_segments=350, max_preview_samples=8_000_000):
-    metadata_path = os.path.splitext(samples_path)[0] + ".json"
+    metadata_path = _find_metadata_path(samples_path)
     metadata = {}
 
-    metadata_found = os.path.exists(metadata_path)
+    metadata_found = metadata_path is not None
     if metadata_found:
         with open(metadata_path, "r", encoding="utf-8") as metadata_file:
             metadata = json.load(metadata_file)
