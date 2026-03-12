@@ -6,12 +6,13 @@ from logic.health_diagnostics import collect_system_health, analyze_capture_heal
 
 
 class HealthDiagnosticsWindow:
-    def __init__(self, root, detect_devices_fn, read_samples_fn, run_in_background_fn, append_log_fn):
+    def __init__(self, root, detect_devices_fn, read_samples_fn, run_in_background_fn, append_log_fn, settings=None):
         self.root = root
         self.detect_devices_fn = detect_devices_fn
         self.read_samples_fn = read_samples_fn
         self.run_in_background_fn = run_in_background_fn
         self.append_log_fn = append_log_fn
+        self.settings = settings or {}
 
         self.popup = newPopup(self.root, name="Health Diagnostics", geometry="560x460")
         self._system_after_id = None
@@ -26,6 +27,13 @@ class HealthDiagnosticsWindow:
     def _build_ui(self):
         body = ttk.Frame(self.popup.win)
         body.pack(fill="both", expand=True, padx=12, pady=10)
+
+        ttk.Label(body, text="Health Diagnostics", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
+        ttk.Label(
+            body,
+            text="Monitor system load and run a quick RTL-SDR capture health check.",
+            justify="left",
+        ).pack(anchor="w", pady=(4, 8))
 
         ttk.Label(body, text="System Health", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
 
@@ -55,27 +63,27 @@ class HealthDiagnosticsWindow:
         row2.pack(fill="x", pady=(0, 4))
 
         ttk.Label(row2, text="Center (Hz)").pack(side="left")
-        self.center_var = tk.StringVar(value="100000000")
+        self.center_var = tk.StringVar(value=str(int(self.settings.get("capture_default_center_freq_hz", 100000000))))
         ttk.Entry(row2, textvariable=self.center_var, width=14).pack(side="left", padx=(6, 12))
 
         ttk.Label(row2, text="Rate (Hz)").pack(side="left")
-        self.rate_var = tk.StringVar(value="2048000")
+        self.rate_var = tk.StringVar(value=str(int(self.settings.get("capture_default_sample_rate_hz", 2048000))))
         ttk.Entry(row2, textvariable=self.rate_var, width=12).pack(side="left", padx=(6, 12))
 
         ttk.Label(row2, text="Gain (dB)").pack(side="left")
-        self.gain_var = tk.StringVar(value="20")
+        self.gain_var = tk.StringVar(value=str(float(self.settings.get("capture_default_gain_db", 20.0))))
         ttk.Entry(row2, textvariable=self.gain_var, width=8).pack(side="left", padx=(6, 0))
 
         row3 = ttk.Frame(body)
         row3.pack(fill="x", pady=(0, 8))
         ttk.Label(row3, text="Duration (s)").pack(side="left")
-        self.duration_var = tk.StringVar(value="0.35")
+        self.duration_var = tk.StringVar(value=str(float(self.settings.get("quick_check_default_duration_s", 0.35))))
         ttk.Entry(row3, textvariable=self.duration_var, width=8).pack(side="left", padx=(6, 12))
 
         self.run_btn = ttk.Button(row3, text="Run Quick Check", command=self._run_quick_check)
         self.run_btn.pack(side="left")
 
-        self.status_var = tk.StringVar(value="Status: Ready")
+        self.status_var = tk.StringVar(value="Status: ready")
         ttk.Label(body, textvariable=self.status_var).pack(anchor="w", pady=(4, 0))
 
         self.capture_var = tk.StringVar(value="Capture: not run")
@@ -99,11 +107,13 @@ class HealthDiagnosticsWindow:
         if not devices:
             self.device_combo["values"] = ["No device detected"]
             self.device_combo.current(0)
+            self.status_var.set("Status: no RTL-SDR devices detected")
             return
 
         labels = [device["label"] for device in devices]
         self.device_combo["values"] = labels
         self.device_combo.current(0)
+        self.status_var.set(f"Status: {len(devices)} device(s) available")
 
     def _refresh_system_health(self):
         health = collect_system_health()
@@ -148,8 +158,9 @@ class HealthDiagnosticsWindow:
                 raise ValueError("Center frequency out of range")
             if sample_rate_hz < 1_000 or sample_rate_hz > 3_200_000:
                 raise ValueError("Sample rate out of range")
-            if duration_s <= 0.0 or duration_s > 2.0:
-                raise ValueError("Duration must be > 0 and <= 2.0")
+            max_duration = float(self.settings.get("quick_check_max_duration_s", 2.0))
+            if duration_s <= 0.0 or duration_s > max_duration:
+                raise ValueError(f"Duration must be > 0 and <= {max_duration}")
         except ValueError as error:
             messagebox.showerror("Health Diagnostics", f"Invalid input: {error}")
             return
@@ -157,7 +168,7 @@ class HealthDiagnosticsWindow:
         requested_samples = int(sample_rate_hz * duration_s)
         self._test_running = True
         self.run_btn.state(["disabled"])
-        self.status_var.set("Status: running quick capture test...")
+        self.status_var.set("Status: running quick check...")
 
         def do_test():
             samples = self.read_samples_fn(
@@ -182,7 +193,7 @@ class HealthDiagnosticsWindow:
 
             warnings = result["warnings"]
             self.warn_var.set("Warnings: " + ("; ".join(warnings) if warnings else "none"))
-            self.status_var.set("Status: quick test complete")
+            self.status_var.set("Status: quick check complete")
 
             self.append_log_fn(
                 "Health quick check finished "
@@ -190,7 +201,7 @@ class HealthDiagnosticsWindow:
             )
 
         def on_error(error):
-            self.status_var.set("Status: quick test failed")
+            self.status_var.set("Status: quick check failed")
             self.warn_var.set(f"Warnings: capture failed ({error})")
             messagebox.showerror("Health Diagnostics", f"Quick check failed: {error}")
             self.append_log_fn("Health quick check failed")

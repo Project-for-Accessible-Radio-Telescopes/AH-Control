@@ -19,7 +19,7 @@ class SpreadsheetWindow:
 
 
             self.win = tk.Toplevel(self.root)
-            self.win.title(f"{title} ({file_path}) - Spreadsheet {self.index}")
+            self.win.title(f"AH-Control | Spreadsheet {self.index} | {title} ({file_path})")
             self.win.geometry("800x500")
             self._saved_path = file_path
 
@@ -35,7 +35,7 @@ class SpreadsheetWindow:
             self.cols = cols
 
             self.win = tk.Toplevel(self.root)
-            self.win.title(f"{title} - Spreadsheet {self.index}")
+            self.win.title(f"AH-Control | Spreadsheet {self.index} | {title}")
             self.win.geometry("800x500")
             self._saved_path = None
 
@@ -200,14 +200,14 @@ class SpreadsheetWindow:
             self._saved_path = path
             return True
         except Exception as e:
-            messagebox.showerror("Save Error", f"Could not save CSV:\n{e}")
+            messagebox.showerror("Spreadsheet", f"Could not save CSV:\n{e}")
             return False
 
     def save(self):
         if self._saved_path:
             ok = self._write_csv(self._saved_path)
             if ok:
-                messagebox.showinfo("Saved", f"Saved to {self._saved_path}")
+                messagebox.showinfo("Spreadsheet", f"Saved to\n{self._saved_path}")
         else:
             self.save_as()
 
@@ -221,7 +221,7 @@ class SpreadsheetWindow:
             return
         ok = self._write_csv(path)
         if ok:
-            messagebox.showinfo("Saved", f"Saved to {path}")
+            messagebox.showinfo("Spreadsheet", f"Saved to\n{path}")
 
     def _load_csv(self, path):
         try:
@@ -229,7 +229,7 @@ class SpreadsheetWindow:
                 reader = csv.reader(f)
                 rows = list(reader)
         except Exception as e:
-            messagebox.showerror("Open Error", f"Could not open CSV:\n{e}")
+            messagebox.showerror("Spreadsheet", f"Could not open CSV:\n{e}")
             return False
 
         if not rows:
@@ -262,7 +262,7 @@ class SpreadsheetWindow:
             return
         ok = self._load_csv(path)
         if ok:
-            messagebox.showinfo("Opened", f"Loaded {path}")
+            messagebox.showinfo("Spreadsheet", f"Loaded\n{path}")
     
     def _graph_data(self):
         # Pass a plain snapshot of cell values so the graph dialog can resolve

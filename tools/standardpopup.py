@@ -1,30 +1,30 @@
 import tkinter as tk
 from tkinter import ttk
-# import PIL to be used too
 
 class msgPopup:
     def __init__(self, title, message, msgtype="info", size=(400, 250)):
         self.win = tk.Toplevel()
-        self.win.title(f"{title} {msgtype.capitalize()} - AH-Control")
+        self.win.title(f"AH-Control | {title}")
         self.win.geometry(f"{size[0]}x{size[1]}")
 
-        # Must include PILLOW for non-GIF images, so I will omit images for now.
+        container = ttk.Frame(self.win, padding=12)
+        container.pack(fill="both", expand=True)
 
-        # self.error_icon = tk.PhotoImage(file="./assets/visual/error.svg")
-        # self.info_icon = tk.PhotoImage(file="./assets/visual/info.svg")
-        
-        self.info_label = tk.Label(self.win)
+        self.info_label = ttk.Label(container)
 
         if msgtype == "error":
-            self.info_label.config(text="Error: ", fg="red")
+            self.info_label.config(text="Error", foreground="#c92a2a")
         elif msgtype == "warning":
-            self.info_label.config(text="Warning: ", fg="yellow")
+            self.info_label.config(text="Warning", foreground="#e67700")
         elif msgtype == "success":
-            self.info_label.config(text="Success: ", fg="green")
-        elif msgtype == "info":
-            self.info_label.config(text="Info: ", fg="#007acc")
+            self.info_label.config(text="Success", foreground="#2b8a3e")
+        else:
+            self.info_label.config(text="Info", foreground="#1971c2")
 
-        self.info_label.pack(pady=10)
+        self.info_label.pack(anchor="w", pady=(0, 6))
 
-        tk.Label(self.win, text=message, wraplength=(size[0]-30)).pack(pady=5)
-        ttk.Button(self.win, text="OK", command=self.win.destroy).pack(pady=8)
+        ttk.Label(container, text=message, wraplength=(size[0] - 36), justify="left").pack(anchor="w", pady=(0, 12))
+
+        actions = ttk.Frame(container)
+        actions.pack(fill="x")
+        ttk.Button(actions, text="OK", command=self.win.destroy).pack(side="right")

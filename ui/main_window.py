@@ -14,6 +14,7 @@ from tools.graphs.graphing import plot_basic_graph
 from ui.settings_window import SettingsWindow
 from ui.advanced_signal_window import AdvancedSignalWindow
 from ui.health_diagnostics_window import HealthDiagnosticsWindow
+from ui.data_recording_window import DataRecordingWindow
 import webbrowser
 from logic.file_ext import build_session_payload, write_ahf_file, read_ahf_file
 
@@ -32,7 +33,7 @@ from tools.popup import newPopup
 from tools.standardpopup import msgPopup
 
 from logic.local_info import obtain_local_info, compute_sidereal_time_and_hour_angle
-from logic.recording_metadata import save_samples_and_metadata
+from logic.settings_manager import load_settings_file, save_settings_file
 
 class MainWindow:
     def __init__(self, root):
@@ -45,12 +46,13 @@ class MainWindow:
         # Use CustomMenu manager for popup menus
         self.menu = CustomMenu(self.root)
 
-        settings = self._read_settings()
+        self.settings = load_settings_file("data/settings.json")
 
-        self.root.title(f"AH-Control v{settings.get('version')}")
+        self.root.title(f"AH-Control v{self.settings.get('version')}")
 
-        self._create_menu_bar(theme=settings.get("theme", "light"))
-        self._create_content(theme=settings.get("theme", "light"))
+        self._create_menu_bar(theme=self.settings.get("theme", "light"))
+        self._create_content(theme=self.settings.get("theme", "light"))
+        self._apply_runtime_settings()
         self._bind_log_selection_guards()
 
     def _bind_log_selection_guards(self):
@@ -332,8 +334,24 @@ class MainWindow:
 
     def _write_settings(self, settings):
         os.makedirs("data", exist_ok=True)
-        with open("data/settings.json", "w", encoding="utf-8") as settings_file:
-            json.dump(settings, settings_file, indent=2)
+        self.settings = save_settings_file(settings, settings_path="data/settings.json")
+
+    def _apply_runtime_settings(self):
+        theme = self.settings.get("theme", "light")
+        if theme == "dark":
+            self.root.configure(bg="#333333")
+            log_bg = "#1f1f1f"
+            log_fg = "#f1f1f1"
+            insert_bg = "#f1f1f1"
+        else:
+            self.root.configure(bg="#ffffff")
+            log_bg = "#ffffff"
+            log_fg = "#111111"
+            insert_bg = "#111111"
+
+        if hasattr(self, "log_text"):
+            font_size = int(self.settings.get("font_size", 10))
+            self.log_text.configure(font=("TkDefaultFont", font_size), bg=log_bg, fg=log_fg, insertbackground=insert_bg)
 
     def new_project(self):
         should_continue = messagebox.askyesno(
@@ -640,6 +658,7 @@ class MainWindow:
             read_samples_fn=self._read_sdr_samples,
             run_in_background_fn=self._run_in_background,
             append_log_fn=self._append_log,
+            settings=self.settings,
         )
         self._append_log("Health diagnostics opened")
 
@@ -649,198 +668,39 @@ class MainWindow:
             self._append_log("Recording unavailable: missing RTL-SDR dependency")
             return
 
-        popup = newPopup(self.root, name="Start Recording", geometry="520x430")
-
-        ttk.Label(popup.win, text="Detected RTL-SDR Devices").pack(pady=(10, 2))
-        devices, device_selector = self._build_device_selector(popup.win)
-
-        if device_selector is None:
-            ttk.Label(popup.win, text="No RTL-SDR device detected.").pack(pady=6)
-            ttk.Button(
-                popup.win,
-                text="Retry Detection",
-                command= lambda: (popup.win.destroy(), self.start_recording_menu()),
-            ).pack(pady=8)
-            self._append_log("Recording: no SDR device detected")
-            return
-
-        device_selector.pack(fill="x", padx=12)
-
-        ttk.Label(popup.win, text="Center Frequency (Hz)").pack(pady=(8, 2))
-        center_freq_entry = ttk.Entry(popup.win)
-        center_freq_entry.insert(0, "100000000")
-        center_freq_entry.pack(fill="x", padx=12)
-
-        ttk.Label(popup.win, text="Sample Rate (Hz)").pack(pady=(8, 2))
-        sample_rate_entry = ttk.Entry(popup.win)
-        sample_rate_entry.insert(0, "2048000")
-        sample_rate_entry.pack(fill="x", padx=12)
-
-        ttk.Label(popup.win, text="Gain (dB)").pack(pady=(8, 2))
-        gain_entry = ttk.Entry(popup.win)
-        gain_entry.insert(0, "20")
-        gain_entry.pack(fill="x", padx=12)
-
-        ttk.Label(popup.win, text="Duration (seconds)").pack(pady=(8, 2))
-        duration_entry = ttk.Entry(popup.win)
-        duration_entry.insert(0, "2")
-        duration_entry.pack(fill="x", padx=12)
-
-        ttk.Label(popup.win, text="Output Tag (optional)").pack(pady=(8, 2))
-        output_tag_entry = ttk.Entry(popup.win)
-        output_tag_entry.insert(0, "capture")
-        output_tag_entry.pack(fill="x", padx=12)
-
-        status_label = ttk.Label(popup.win, text="Ready")
-        status_label.pack(pady=10)
-
-        entry_widgets = [device_selector, center_freq_entry, sample_rate_entry, gain_entry, duration_entry, output_tag_entry]
-
-        def begin_recording():
-            selected_label = device_selector.get()
-            selected_device = next((d for d in devices if d["label"] == selected_label), None)
-            if selected_device is None:
-                messagebox.showerror("Record", "Please select a device.")
-                return
-
-            try:
-                center_freq_hz = self._validate_range(
-                    self._parse_float(center_freq_entry.get(), "Center Frequency"),
-                    "Center Frequency",
-                    minimum=1_000,
-                    maximum=3_000_000_000,
-                )
-                sample_rate_hz = self._validate_range(
-                    self._parse_float(sample_rate_entry.get(), "Sample Rate"),
-                    "Sample Rate",
-                    minimum=1_000,
-                    maximum=3_200_000,
-                )
-                gain_db = self._validate_range(
-                    self._parse_float(gain_entry.get(), "Gain"),
-                    "Gain",
-                    minimum=-10,
-                    maximum=60,
-                )
-                duration_s = self._validate_range(
-                    self._parse_float(duration_entry.get(), "Duration"),
-                    "Duration",
-                    minimum=0.1,
-                    maximum=120,
-                )
-                tag = self._sanitize_output_tag(output_tag_entry.get())
-
-                estimated_num_samples = int(sample_rate_hz * duration_s)
-                estimated_bytes = estimated_num_samples * 16
-                estimated_mb = estimated_bytes / (1024 * 1024)
-
-                should_continue = messagebox.askyesno(
-                    "Confirm Recording",
-                    (
-                        f"Device: {selected_device['label']}\n"
-                        f"Estimated samples: {estimated_num_samples:,}\n"
-                        f"Estimated memory use: {estimated_mb:.1f} MB\n\n"
-                        "Start recording now?"
-                    ),
-                )
-                if not should_continue:
-                    return
-
-                num_samples = estimated_num_samples
-                if num_samples > 2_500_000:
-                    messagebox.showwarning(
-                        "Record",
-                        "Sample size was large. Limited capture to 2,500,000 samples for responsiveness.",
-                    )
-                    num_samples = 2_500_000
-            except ValueError as error:
-                messagebox.showerror("Record", str(error))
-                return
-
-            status_label.config(text="Recording in progress...")
-            start_button.state(["disabled"])
-            refresh_button.state(["disabled"])
-            for widget in entry_widgets:
-                try:
-                    widget.state(["disabled"])
-                except Exception:
-                    continue
-
-            def do_recording():
-                samples = self._read_sdr_samples(
-                    device_index=selected_device["index"],
-                    center_freq_hz=center_freq_hz,
-                    sample_rate_hz=sample_rate_hz,
-                    gain_db=gain_db,
-                    num_samples=num_samples,
-                )
-
-                result = save_samples_and_metadata(
-                    samples=samples,
-                    output_dir=os.path.join("data", "recordings"),
-                    tag=tag,
-                    device_index=selected_device["index"],
-                    serial=selected_device["serial"],
-                    center_freq_hz=center_freq_hz,
-                    sample_rate_hz=sample_rate_hz,
-                    gain_db=gain_db,
-                    duration_s=duration_s,
-                    num_samples=num_samples,
-                )
-                return {
-                    "samples_path": result["samples_path"],
-                    "num_samples": result["num_samples"],
-                }
-
-            def on_success(result):
-                samples_path = result["samples_path"]
-                captured_samples = result["num_samples"]
-                status_label.config(text=f"Saved: {samples_path}")
-                self._append_log(f"Recording saved ({captured_samples} samples)")
-                messagebox.showinfo("Record", f"Recording saved to\n{samples_path}")
-
-            def on_error(error):
-                messagebox.showerror("Record", f"Recording failed: {error}")
-                status_label.config(text="Recording failed")
-                self._append_log("Recording failed")
-
-            def on_finally():
-                start_button.state(["!disabled"])
-                refresh_button.state(["!disabled"])
-                for widget in entry_widgets:
-                    try:
-                        widget.state(["!disabled"])
-                    except Exception:
-                        continue
-
-            self._run_in_background(do_recording, on_success=on_success, on_error=on_error, on_finally=on_finally)
-
-        controls = ttk.Frame(popup.win)
-        controls.pack(pady=(2, 12))
-
-        refresh_button = ttk.Button(
-            controls,
-            text="Refresh Devices",
-            command=lambda: (popup.win.destroy(), self.start_recording_menu()),
+        DataRecordingWindow(
+            root=self.root,
+            detect_devices_fn=self._detect_rtl_sdr_devices,
+            read_samples_fn=self._read_sdr_samples,
+            run_in_background_fn=self._run_in_background,
+            append_log_fn=self._append_log,
+            settings=self.settings,
         )
-        refresh_button.pack(side="left", padx=6)
-
-        start_button = ttk.Button(controls, text="Start Recording", command=begin_recording)
-        start_button.pack(side="left", padx=6)
 
         self._append_log("Recording setup opened")
 
     def settings_tool(self):
-        popup = SettingsWindow()
-
-        popup_window = newPopup(self.root, name="Settings", geometry="400x300")
-        ttk.Label(popup_window.win, text="Settings").pack(pady=10)
-
+        SettingsWindow(
+            root=self.root,
+            settings_path="data/settings.json",
+            settings_snapshot=self.settings,
+            on_save_callback=self._on_settings_saved,
+        )
         self._append_log("Settings opened")
+
+    def _on_settings_saved(self, settings):
+        self.settings = settings
+        self.root.title(f"AH-Control v{self.settings.get('version')}")
+        self._apply_runtime_settings()
+        self._append_log("Settings saved")
 
     def process_recordings_action(self):
         try:
-            result = process_all_recordings(recordings_dir="data/recordings", output_subdir="processed", nfft=4096)
+            result = process_all_recordings(
+                recordings_dir="data/recordings",
+                output_subdir="processed",
+                nfft=int(self.settings.get("analysis_nfft", 4096)),
+            )
 
             processed_count = len(result.get("processed", []))
             skipped_count = len(result.get("skipped", []))
@@ -952,9 +812,9 @@ class MainWindow:
         def analyze_recording():
             return analyze_recording_for_advanced_view(
                 samples_path=samples_path,
-                nfft=4096,
-                max_segments=350,
-                max_preview_samples=8_000_000,
+                nfft=int(self.settings.get("analysis_nfft", 4096)),
+                max_segments=int(self.settings.get("analysis_max_segments", 350)),
+                max_preview_samples=int(self.settings.get("analysis_max_preview_samples", 8_000_000)),
             )
 
         def on_success(result):
@@ -991,17 +851,15 @@ class MainWindow:
         self._run_in_background(analyze_recording, on_success=on_success, on_error=on_error)
     
     def _read_settings(self):
-        try:
-            with open("data/settings.json", "r") as f:
-                settings = json.load(f)
-                return settings
-        except Exception as e:
-            print(f"Error reading settings: {e}")
-            return {}
+        self.settings = load_settings_file("data/settings.json")
+        return dict(self.settings)
         
     def obtain_local_info(self):
         try:
-            local_info = obtain_local_info()
+            local_info = obtain_local_info(
+                timeout_s=int(self.settings.get("network_timeout_s", 6)),
+                allow_ip_fallback=bool(self.settings.get("local_info_use_ip_fallback", True)),
+            )
             if local_info is None:
                 messagebox.showerror("Local Information", "Could not obtain local information.")
                 return

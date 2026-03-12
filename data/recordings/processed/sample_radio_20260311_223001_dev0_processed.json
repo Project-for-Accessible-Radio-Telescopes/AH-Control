@@ -1,0 +1,39 @@
+{
+  "source_samples": "data/recordings/sample_radio_20260311_223001_dev0.npy",
+  "source_metadata": "data/recordings/sample_radio_20260311_223001_dev0.json",
+  "processed_at": "2026-03-12T11:52:09",
+  "sample_count": 4096000,
+  "nfft": 4096,
+  "avg_power_linear": 1.1850594282150269,
+  "rms_amplitude": 1.0886043310165405,
+  "sample_rate_hz": 2048000.0,
+  "center_freq_hz": 100000000.0,
+  "gain_db": 20.0,
+  "duration_s": 2.0,
+  "device_index": 0,
+  "serial": "simulated",
+  "spectrum": {
+    "max_power_db": 61.77467210774022,
+    "min_power_db": 22.281723364448514,
+    "mean_power_db": 22.922099853836393
+  },
+  "signal_detection": {
+    "noise_floor_db": 22.82743680105723,
+    "threshold_db": 30.82743680105723,
+    "peak_count": 2,
+    "peaks": [
+      {
+        "bin": 2290,
+        "frequency_hz": 100121000.0,
+        "power_db": 61.77467210774022,
+        "snr_db": 38.94723530668299
+      },
+      {
+        "bin": 1368,
+        "frequency_hz": 99660000.0,
+        "power_db": 60.20434571800749,
+        "snr_db": 37.376908916950256
+      }
+    ]
+  }
+}

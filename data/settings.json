@@ -1,5 +1,18 @@
 {
   "version": "0.1.0",
+  "language": "en",
   "theme": "dark",
-  "language": "en"
+  "font_size": 10,
+  "capture_default_sample_rate_hz": 2048000.0,
+  "capture_default_center_freq_hz": 100000000.0,
+  "capture_default_gain_db": 20.0,
+  "capture_default_duration_s": 2.0,
+  "capture_sample_cap": 2500000,
+  "analysis_nfft": 4096,
+  "analysis_max_segments": 350,
+  "analysis_max_preview_samples": 8000000,
+  "quick_check_default_duration_s": 0.35,
+  "quick_check_max_duration_s": 2.0,
+  "network_timeout_s": 6,
+  "local_info_use_ip_fallback": true
 }

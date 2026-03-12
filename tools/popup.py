@@ -1,8 +1,7 @@
 import tkinter as tk
-import tools.cbuttons as cbuttons
 
 class newPopup:
-    def __init__(self, root, name="New Window - AHControl", geometry="400x300", ui=None):
+    def __init__(self, root, name="New Window - AH-Control", geometry="400x300", ui=None):
         self.root = root
         self.name = name
         self.win = tk.Toplevel(self.root)
@@ -17,6 +16,6 @@ class newPopup:
                 element.pack()
 
 class graphPopup(newPopup):
-    def __init__(self, root, name="Graph Popup - AHControl", geometry="400x300", ui=None):
+    def __init__(self, root, name="Graph Popup - AH-Control", geometry="400x300", ui=None):
         super().__init__(root, name, geometry, ui)
         

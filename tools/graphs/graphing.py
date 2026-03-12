@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import tkinter as tk
+from tkinter import ttk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from tools.popup import graphPopup
 import numpy as np
@@ -13,12 +14,12 @@ def plot_basic_graph(root, x, y, title="Graph", xlabel="X-axis", ylabel="Y-axis"
     ax.set_ylabel(ylabel)
 
     popup = graphPopup(root, name=title, geometry="600x420")
-    footer = tk.Frame(popup.win)
+    footer = ttk.Frame(popup.win)
     footer.pack(side="bottom", fill="x", padx=8, pady=6)
 
-    tk.Label(footer, text="Graph ready", anchor="w").pack(side="left")
+    ttk.Label(footer, text="Status: graph ready", anchor="w").pack(side="left")
 
-    toolbar_frame = tk.Frame(popup.win)
+    toolbar_frame = ttk.Frame(popup.win)
     toolbar_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 4))
 
     canvas = FigureCanvasTkAgg(fig, master=popup.win)
@@ -33,7 +34,7 @@ def plot_basic_graph(root, x, y, title="Graph", xlabel="X-axis", ylabel="Y-axis"
         plt.close(fig)
         popup.win.destroy()
 
-    tk.Button(footer, text="OK", command=close_popup).pack(side="right")
+    ttk.Button(footer, text="Close", command=close_popup).pack(side="right")
     popup.win.protocol("WM_DELETE_WINDOW", close_popup)
 
 def plot_scatter_graph(root, x, y, title="Scatter Graph", xlabel="X-axis", ylabel="Y-axis", lobf=False):
@@ -45,12 +46,12 @@ def plot_scatter_graph(root, x, y, title="Scatter Graph", xlabel="X-axis", ylabe
     ax.set_ylabel(ylabel)
 
     popup = graphPopup(root, name=title, geometry="600x420")
-    footer = tk.Frame(popup.win)
+    footer = ttk.Frame(popup.win)
     footer.pack(side="bottom", fill="x", padx=8, pady=6)
 
-    tk.Label(footer, text="Graph ready", anchor="w").pack(side="left")
+    ttk.Label(footer, text="Status: graph ready", anchor="w").pack(side="left")
 
-    toolbar_frame = tk.Frame(popup.win)
+    toolbar_frame = ttk.Frame(popup.win)
     toolbar_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 4))
 
     canvas = FigureCanvasTkAgg(fig, master=popup.win)
@@ -71,7 +72,7 @@ def plot_scatter_graph(root, x, y, title="Scatter Graph", xlabel="X-axis", ylabe
         plt.close(fig)
         popup.win.destroy()
 
-    tk.Button(footer, text="OK", command=close_popup).pack(side="right")
+    ttk.Button(footer, text="Close", command=close_popup).pack(side="right")
     popup.win.protocol("WM_DELETE_WINDOW", close_popup)
 
 def plot_bar_graph(root, x, y, title="Bar Graph", xlabel="X-axis", ylabel="Y-axis"):
@@ -83,12 +84,12 @@ def plot_bar_graph(root, x, y, title="Bar Graph", xlabel="X-axis", ylabel="Y-axi
     ax.set_ylabel(ylabel)
 
     popup = graphPopup(root, name=title, geometry="600x420")
-    footer = tk.Frame(popup.win)
+    footer = ttk.Frame(popup.win)
     footer.pack(side="bottom", fill="x", padx=8, pady=6)
 
-    tk.Label(footer, text="Graph ready", anchor="w").pack(side="left")
+    ttk.Label(footer, text="Status: graph ready", anchor="w").pack(side="left")
 
-    toolbar_frame = tk.Frame(popup.win)
+    toolbar_frame = ttk.Frame(popup.win)
     toolbar_frame.pack(side="bottom", fill="x", padx=8, pady=(0, 4))
 
     canvas = FigureCanvasTkAgg(fig, master=popup.win)
@@ -103,7 +104,7 @@ def plot_bar_graph(root, x, y, title="Bar Graph", xlabel="X-axis", ylabel="Y-axi
         plt.close(fig)
         popup.win.destroy()
 
-    tk.Button(footer, text="OK", command=close_popup).pack(side="right")
+    ttk.Button(footer, text="Close", command=close_popup).pack(side="right")
     popup.win.protocol("WM_DELETE_WINDOW", close_popup)
 
 def plot_line_graph(root, x, y, title="Line Graph", xlabel="X-axis", ylabel="Y-axis"):
