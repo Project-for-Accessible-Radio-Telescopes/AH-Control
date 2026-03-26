@@ -4,6 +4,20 @@ from datetime import datetime
 
 import numpy as np
 
+from logic.file_ext import validate_recording_integrity
+
+
+def compute_rms_db(samples: np.ndarray, epsilon: float = 1e-12) -> float:
+    """Compute RMS amplitude in dBFS-like scale for complex or real samples."""
+    values = np.asarray(samples)
+    if values.ndim != 1:
+        values = values.reshape(-1)
+    if values.size == 0:
+        raise ValueError("Cannot compute RMS from empty sample array")
+
+    rms = float(np.sqrt(np.mean(np.abs(values) ** 2)))
+    return float(20.0 * np.log10(rms + float(epsilon)))
+
 
 def _compute_psd_db(samples: np.ndarray, nfft: int = 4096) -> np.ndarray:
     samples = np.asarray(samples)
@@ -83,6 +97,10 @@ def _extract_peak_features(psd_db: np.ndarray, sample_rate_hz: float, center_fre
 
 
 def process_recording(samples_path: str, metadata_path: str, output_dir: str, nfft: int = 4096):
+    integrity = validate_recording_integrity(samples_path=samples_path, metadata_path=metadata_path)
+    if integrity["errors"]:
+        raise ValueError("; ".join(integrity["errors"]))
+
     with open(metadata_path, "r", encoding="utf-8") as metadata_file:
         metadata = json.load(metadata_file)
 
@@ -96,6 +114,7 @@ def process_recording(samples_path: str, metadata_path: str, output_dir: str, nf
 
     avg_power_linear = float(np.mean(np.abs(samples) ** 2))
     rms_amplitude = float(np.sqrt(np.mean(np.abs(samples) ** 2)))
+    rms_db = compute_rms_db(samples)
 
     result = {
         "source_samples": samples_path,
@@ -105,6 +124,7 @@ def process_recording(samples_path: str, metadata_path: str, output_dir: str, nf
         "nfft": int(nfft),
         "avg_power_linear": avg_power_linear,
         "rms_amplitude": rms_amplitude,
+        "rms_db": rms_db,
         "sample_rate_hz": sample_rate_hz,
         "center_freq_hz": center_freq_hz,
         "gain_db": metadata.get("gain_db"),
@@ -117,6 +137,7 @@ def process_recording(samples_path: str, metadata_path: str, output_dir: str, nf
             "mean_power_db": float(np.mean(psd_db)),
         },
         "signal_detection": peak_features,
+        "integrity_warnings": integrity["warnings"],
     }
 
     os.makedirs(output_dir, exist_ok=True)
@@ -150,6 +171,13 @@ def process_all_recordings(recordings_dir: str = "data/recordings", output_subdi
         if not os.path.exists(metadata_path):
             skipped.append(f"Missing metadata for {filename}")
             continue
+
+        integrity = validate_recording_integrity(samples_path=samples_path, metadata_path=metadata_path)
+        if integrity["errors"]:
+            skipped.append(f"Integrity errors for {filename}: {'; '.join(integrity['errors'])}")
+            continue
+        if integrity["warnings"]:
+            skipped.append(f"Integrity warnings for {filename}: {'; '.join(integrity['warnings'])}")
 
         try:
             output_path, _ = process_recording(

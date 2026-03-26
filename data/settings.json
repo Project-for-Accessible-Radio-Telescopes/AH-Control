@@ -11,6 +11,7 @@
   "analysis_nfft": 4096,
   "analysis_max_segments": 350,
   "analysis_max_preview_samples": 8000000,
+  "analysis_show_frequency_overlays": false,
   "quick_check_default_duration_s": 0.35,
   "quick_check_max_duration_s": 2.0,
   "network_timeout_s": 6,

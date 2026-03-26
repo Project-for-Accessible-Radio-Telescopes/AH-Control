@@ -21,4 +21,11 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 - Enhanced project structure with additional utility functions and modules. 
-- Added a signal window 
+- Added a signal window.
+- Allowed for more flexible configuration options in the application setup.
+- More complex and comprehensive waterfall visualisation of npy files after iq conversion.
+
+## [0.1.2] - 2026-03-26
+- Added live RMS monitoring in Data Recording, including progress-aware RMS updates during capture.
+- Added optional frequency reference overlays in Advanced Signal View backed by `data/frequency_reference.json`.
+- Added recording integrity validation for sample/metadata pairs with non-blocking warnings in recording and advanced analysis flows.

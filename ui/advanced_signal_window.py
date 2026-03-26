@@ -1,5 +1,6 @@
 import os
 import csv
+import json
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -12,13 +13,14 @@ from logic.sdr_advanced import build_frequency_axis_mhz, extract_peak_metrics
 from tools.standardpopup import msgPopup
 
 class AdvancedSignalWindow:
-    def __init__(self, root, source_file, analysis, sample_rate_hz, center_freq_hz, on_export=None):
+    def __init__(self, root, source_file, analysis, sample_rate_hz, center_freq_hz, on_export=None, settings=None):
         self.root = root
         self.source_file = source_file
         self.analysis = analysis
         self.sample_rate_hz = float(sample_rate_hz)
         self.center_freq_hz = float(center_freq_hz)
         self.on_export = on_export
+        self.settings = settings or {}
 
         self.popup = newPopup(self.root, name="Advanced Signal View (Interactive)", geometry="1120x760")
 
@@ -29,13 +31,17 @@ class AdvancedSignalWindow:
         self.freq_axis_mhz = build_frequency_axis_mhz(self.nfft, self.sample_rate_hz, self.center_freq_hz)
         self.time_axis_s = (np.arange(self.waterfall_db.shape[0]) * self.nfft) / max(self.sample_rate_hz, 1.0)
 
-        self._build_ui()
-        self._render_initial_plot()
         self._pan_active = False
         self._zoom_active = False
         self._grid_enabled = True
         self._peak_markers_enabled = False
         self._peak_marker_artists = []
+        self._overlay_artists = []
+        self._overlay_label_artists = []
+        self._overlay_reference = self._load_frequency_reference()
+
+        self._build_ui()
+        self._render_initial_plot()
 
     def _build_ui(self):
         top_row = ttk.Frame(self.popup.win)
@@ -98,6 +104,14 @@ class AdvancedSignalWindow:
 
         ttk.Button(controls, text="Apply", command=self._update_plot_style).pack(side="left", padx=3)
         ttk.Button(controls, text="Auto Range", command=self._auto_range).pack(side="left", padx=3)
+
+        self.overlay_enabled_var = tk.BooleanVar(value=bool(self.settings.get("analysis_show_frequency_overlays", False)))
+        ttk.Checkbutton(
+            controls,
+            text="Show Frequency Overlays",
+            variable=self.overlay_enabled_var,
+            command=self._toggle_frequency_overlays,
+        ).pack(side="left", padx=(10, 0))
         
         self.toolbar_frame = ttk.Frame(self.popup.win)
         self.toolbar_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 6))
@@ -141,6 +155,7 @@ class AdvancedSignalWindow:
             color="#0b7285",
             linewidth=1.1,
         )
+        self._draw_frequency_overlays()
         self.ax_spectrum.set_title("Average Spectrum (FFT)")
         self.ax_spectrum.set_xlabel("Frequency (MHz)")
         self.ax_spectrum.set_ylabel("Power (dB)")
@@ -185,6 +200,95 @@ class AdvancedSignalWindow:
         kernel = np.ones(width, dtype=np.float64) / width
         return np.convolve(self.averaged_psd_db, kernel, mode="same")
 
+    def _load_frequency_reference(self):
+        reference_path = os.path.join("data", "frequency_reference.json")
+        if not os.path.exists(reference_path):
+            return []
+
+        try:
+            with open(reference_path, "r", encoding="utf-8") as reference_file:
+                rows = json.load(reference_file)
+        except Exception:
+            return []
+
+        normalized = []
+        if not isinstance(rows, list):
+            return normalized
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                lower_hz = float(row.get("lower_hz"))
+                upper_hz = float(row.get("upper_hz"))
+            except Exception:
+                continue
+            if lower_hz >= upper_hz:
+                continue
+            normalized.append(
+                {
+                    "label": str(row.get("label", "Unnamed Band")),
+                    "lower_mhz": lower_hz / 1e6,
+                    "upper_mhz": upper_hz / 1e6,
+                    "color": str(row.get("color", "#ffd166")),
+                }
+            )
+        return normalized
+
+    def _clear_frequency_overlays(self):
+        for artist in self._overlay_artists:
+            try:
+                artist.remove()
+            except Exception:
+                continue
+        for artist in self._overlay_label_artists:
+            try:
+                artist.remove()
+            except Exception:
+                continue
+        self._overlay_artists = []
+        self._overlay_label_artists = []
+
+    def _draw_frequency_overlays(self):
+        self._clear_frequency_overlays()
+        if not self.overlay_enabled_var.get():
+            return
+        if not self._overlay_reference:
+            self.status_var.set("Frequency overlay reference not available")
+            return
+
+        x_min = float(self.freq_axis_mhz[0])
+        x_max = float(self.freq_axis_mhz[-1])
+        y_bottom, y_top = self.ax_spectrum.get_ylim()
+        y_label = y_top - (y_top - y_bottom) * 0.08
+
+        for item in self._overlay_reference:
+            lo = float(item["lower_mhz"])
+            hi = float(item["upper_mhz"])
+            if hi < x_min or lo > x_max:
+                continue
+            lo_visible = max(lo, x_min)
+            hi_visible = min(hi, x_max)
+            span = self.ax_spectrum.axvspan(lo_visible, hi_visible, alpha=0.15, color=item["color"], linewidth=0)
+            self._overlay_artists.append(span)
+
+            label_x = (lo_visible + hi_visible) / 2.0
+            label_artist = self.ax_spectrum.text(
+                label_x,
+                y_label,
+                item["label"],
+                fontsize=7,
+                color="#495057",
+                ha="center",
+                va="top",
+                clip_on=True,
+            )
+            self._overlay_label_artists.append(label_artist)
+
+    def _toggle_frequency_overlays(self):
+        self._draw_frequency_overlays()
+        self.canvas.draw_idle()
+
     def _update_plot_style(self):
         try:
             vmin = float(self.vmin_var.get().strip())
@@ -198,6 +302,7 @@ class AdvancedSignalWindow:
         self.spectrum_line.set_ydata(self._smoothed_spectrum())
         self.ax_spectrum.relim()
         self.ax_spectrum.autoscale_view()
+        self._draw_frequency_overlays()
 
         self.waterfall_image.set_cmap(self.cmap_var.get())
         self.waterfall_image.set_clim(vmin=vmin, vmax=vmax)
@@ -221,6 +326,7 @@ class AdvancedSignalWindow:
 
         self.ax_spectrum.relim()
         self.ax_spectrum.autoscale_view(scalex=False, scaley=True)
+        self._draw_frequency_overlays()
         self.canvas.draw_idle()
 
     def _home(self):

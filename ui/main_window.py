@@ -19,7 +19,7 @@ import webbrowser
 from logic.file_ext import build_session_payload, write_ahf_file, read_ahf_file
 
 import numpy as np
-from logic.sdr_processing import process_all_recordings
+from logic.sdr_processing import process_all_recordings, compute_rms_db
 from logic.sdr_advanced import (
     analyze_recording_for_advanced_view,
     build_frequency_axis_mhz,
@@ -583,17 +583,54 @@ class MainWindow:
         selector.current(0)
         return devices, selector
 
-    def _read_sdr_samples(self, device_index, center_freq_hz, sample_rate_hz, gain_db, num_samples):
+    def _read_sdr_samples(
+        self,
+        device_index,
+        center_freq_hz,
+        sample_rate_hz,
+        gain_db,
+        num_samples,
+        chunk_size=None,
+        on_progress=None,
+    ):
         rtlsdr_class = self._get_rtlsdr_class()
         if rtlsdr_class is None:
             raise RuntimeError("RTL-SDR library is unavailable")
+
+        total_samples = int(num_samples)
+        chunk_size = int(chunk_size or min(262_144, total_samples))
+        if chunk_size <= 0:
+            chunk_size = total_samples
 
         sdr = rtlsdr_class(device_index=device_index)
         try:
             sdr.sample_rate = sample_rate_hz
             sdr.center_freq = center_freq_hz
             sdr.gain = gain_db
-            samples = sdr.read_samples(num_samples)
+            chunks = []
+            collected = 0
+
+            while collected < total_samples:
+                remaining = total_samples - collected
+                read_now = min(chunk_size, remaining)
+                part = sdr.read_samples(read_now)
+                chunks.append(part)
+                collected += int(len(part))
+
+                if on_progress is not None and len(part) > 0:
+                    try:
+                        on_progress({
+                            "samples_collected": collected,
+                            "samples_total": total_samples,
+                            "chunk_rms_db": compute_rms_db(part),
+                        })
+                    except Exception:
+                        pass
+
+            if not chunks:
+                raise RuntimeError("No samples were read from RTL-SDR")
+
+            samples = np.concatenate(chunks)
             return samples
         finally:
             sdr.close()
@@ -859,6 +896,7 @@ class MainWindow:
             sample_rate_hz=sample_rate_hz,
             center_freq_hz=center_freq_hz,
             on_export=self._open_static_advanced_signal_view_popup,
+            settings=self.settings,
         )
 
     def advanced_signal_view_action(self):
@@ -901,6 +939,16 @@ class MainWindow:
                 messagebox.showwarning(
                     "Advanced Signal View",
                     "Metadata file was not found. Using default sample rate and center frequency.",
+                )
+            elif result.get("integrity_warnings"):
+                messagebox.showwarning(
+                    "Advanced Signal View",
+                    "Recording metadata has integrity warnings:\n\n"
+                    + "\n".join(result["integrity_warnings"][:5]),
+                )
+                self._append_log(
+                    "Advanced signal integrity warnings: "
+                    + "; ".join(result["integrity_warnings"][:3])
                 )
             if result["truncated"]:
                 self._append_log("Advanced view used the first 8,000,000 samples for performance")

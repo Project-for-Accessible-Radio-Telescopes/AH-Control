@@ -3,21 +3,15 @@ import os
 
 import numpy as np
 
+from logic.file_ext import find_recording_metadata_path, validate_recording_integrity
+
 
 DEFAULT_SAMPLE_RATE_HZ = 2_048_000.0
 DEFAULT_CENTER_FREQ_HZ = 100_000_000.0
 
 
 def _find_metadata_path(samples_path):
-    stem = os.path.splitext(samples_path)[0]
-    candidates = [
-        stem + ".json",
-        stem + "_metadata.json",
-    ]
-    for candidate in candidates:
-        if os.path.exists(candidate):
-            return candidate
-    return None
+    return find_recording_metadata_path(samples_path)
 
 
 def build_frequency_axis_mhz(nfft, sample_rate_hz, center_freq_hz):
@@ -89,6 +83,10 @@ def extract_peak_metrics(averaged_psd_db, freq_axis_mhz):
 
 def analyze_recording_for_advanced_view(samples_path, nfft=4096, max_segments=350, max_preview_samples=8_000_000):
     metadata_path = _find_metadata_path(samples_path)
+    integrity = validate_recording_integrity(samples_path=samples_path, metadata_path=metadata_path)
+    if integrity["errors"]:
+        raise ValueError("; ".join(integrity["errors"]))
+
     metadata = {}
 
     metadata_found = metadata_path is not None
@@ -113,4 +111,5 @@ def analyze_recording_for_advanced_view(samples_path, nfft=4096, max_segments=35
         "center_freq_hz": center_freq_hz,
         "metadata_found": metadata_found,
         "truncated": truncated,
+        "integrity_warnings": integrity["warnings"],
     }

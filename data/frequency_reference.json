@@ -1,0 +1,38 @@
+[
+  {
+    "label": "NOAA Weather Radio (US)",
+    "lower_hz": 162400000,
+    "upper_hz": 162550000,
+    "color": "#ffd166"
+  },
+  {
+    "label": "2m Amateur Band",
+    "lower_hz": 144000000,
+    "upper_hz": 148000000,
+    "color": "#90e0ef"
+  },
+  {
+    "label": "FM Broadcast",
+    "lower_hz": 88000000,
+    "upper_hz": 108000000,
+    "color": "#bde0fe"
+  },
+  {
+    "label": "Airband AM",
+    "lower_hz": 118000000,
+    "upper_hz": 137000000,
+    "color": "#caffbf"
+  },
+  {
+    "label": "ISM 433 MHz",
+    "lower_hz": 433050000,
+    "upper_hz": 434790000,
+    "color": "#ffadad"
+  },
+  {
+    "label": "ISM 915 MHz",
+    "lower_hz": 902000000,
+    "upper_hz": 928000000,
+    "color": "#fdffb6"
+  }
+]

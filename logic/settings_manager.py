@@ -15,6 +15,7 @@ DEFAULT_SETTINGS = {
     "analysis_nfft": 4096,
     "analysis_max_segments": 350,
     "analysis_max_preview_samples": 8_000_000,
+    "analysis_show_frequency_overlays": False,
     "quick_check_default_duration_s": 0.35,
     "quick_check_max_duration_s": 2.0,
     "network_timeout_s": 6,
@@ -112,6 +113,10 @@ def merge_settings(raw_settings):
         DEFAULT_SETTINGS["analysis_max_preview_samples"],
         100_000,
         100_000_000,
+    )
+    merged["analysis_show_frequency_overlays"] = _coerce_bool(
+        merged.get("analysis_show_frequency_overlays"),
+        DEFAULT_SETTINGS["analysis_show_frequency_overlays"],
     )
 
     merged["quick_check_default_duration_s"] = _coerce_float(

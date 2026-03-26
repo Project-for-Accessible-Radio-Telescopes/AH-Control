@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 from tools.popup import newPopup
+from logic.file_ext import validate_recording_integrity
+from logic.sdr_processing import compute_rms_db
 from logic.recording_metadata import save_samples_and_metadata
 
 
@@ -17,6 +19,7 @@ class DataRecordingWindow:
         self.popup = newPopup(self.root, name="Data Recording", geometry="560x430")
         self.devices = []
         self._recording_active = False
+        self._live_rms_db = None
 
         self._build_ui()
         self._refresh_devices()
@@ -70,6 +73,9 @@ class DataRecordingWindow:
 
         self.status_var = tk.StringVar(value="Status: ready")
         ttk.Label(body, textvariable=self.status_var).pack(anchor="w", pady=(4, 0))
+
+        self.rms_var = tk.StringVar(value="Live RMS: -- dB")
+        ttk.Label(body, textvariable=self.rms_var).pack(anchor="w", pady=(2, 0))
 
         self.saved_path_var = tk.StringVar(value="Saved file: --")
         ttk.Label(body, textvariable=self.saved_path_var, wraplength=530, justify="left").pack(anchor="w", pady=(2, 0))
@@ -168,9 +174,27 @@ class DataRecordingWindow:
             )
 
         self._recording_active = True
+        self._live_rms_db = None
         self.start_btn.state(["disabled"])
         self.refresh_btn.state(["disabled"])
         self.status_var.set("Status: running capture...")
+        self.rms_var.set("Live RMS: collecting...")
+
+        def on_capture_progress(progress):
+            chunk_rms_db = progress.get("chunk_rms_db")
+            collected = int(progress.get("samples_collected", 0))
+            total = max(1, int(progress.get("samples_total", 1)))
+            if chunk_rms_db is None:
+                return
+            self._live_rms_db = float(chunk_rms_db)
+
+            def update_ui():
+                if not self._recording_active:
+                    return
+                pct = (collected / total) * 100.0
+                self.rms_var.set(f"Live RMS: {self._live_rms_db:.2f} dB | {pct:.0f}%")
+
+            self.root.after(0, update_ui)
 
         def do_recording():
             samples = self.read_samples_fn(
@@ -179,7 +203,10 @@ class DataRecordingWindow:
                 sample_rate_hz=config["sample_rate_hz"],
                 gain_db=config["gain_db"],
                 num_samples=config["num_samples"],
+                on_progress=on_capture_progress,
             )
+
+            final_rms_db = compute_rms_db(samples)
 
             result = save_samples_and_metadata(
                 samples=samples,
@@ -193,17 +220,32 @@ class DataRecordingWindow:
                 duration_s=config["duration_s"],
                 num_samples=config["num_samples"],
             )
+            result["rms_db"] = final_rms_db
             return result
 
         def on_success(result):
             saved_path = result["samples_path"]
             self.status_var.set("Status: capture complete")
+            self.rms_var.set(f"Live RMS: {float(result.get('rms_db', 0.0)):.2f} dB")
             self.saved_path_var.set(f"Saved file: {saved_path}")
+
+            integrity = validate_recording_integrity(
+                samples_path=result["samples_path"],
+                metadata_path=result.get("metadata_path"),
+            )
+            if integrity["warnings"]:
+                self.append_log_fn("Recording integrity warnings: " + "; ".join(integrity["warnings"][:3]))
+                messagebox.showwarning(
+                    "Data Recording",
+                    "Recording saved with warnings:\n\n" + "\n".join(integrity["warnings"][:5]),
+                )
+
             self.append_log_fn(f"Recording saved ({result['num_samples']} samples)")
             messagebox.showinfo("Data Recording", f"Recording saved to\n{saved_path}")
 
         def on_error(error):
             self.status_var.set("Status: capture failed")
+            self.rms_var.set("Live RMS: -- dB")
             messagebox.showerror("Data Recording", f"Recording failed:\n{error}")
             self.append_log_fn("Recording failed")
 

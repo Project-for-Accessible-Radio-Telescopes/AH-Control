@@ -56,6 +56,7 @@ class SettingsWindow:
         self.analysis_nfft_var = tk.IntVar(value=int(self.settings["analysis_nfft"]))
         self.analysis_segments_var = tk.IntVar(value=int(self.settings["analysis_max_segments"]))
         self.analysis_preview_var = tk.IntVar(value=int(self.settings["analysis_max_preview_samples"]))
+        self.analysis_overlay_var = tk.BooleanVar(value=bool(self.settings["analysis_show_frequency_overlays"]))
 
         self.quick_default_duration_var = tk.DoubleVar(value=float(self.settings["quick_check_default_duration_s"]))
         self.quick_max_duration_var = tk.DoubleVar(value=float(self.settings["quick_check_max_duration_s"]))
@@ -94,6 +95,14 @@ class SettingsWindow:
         self._row(parent, "Analysis Max Segments", ttk.Entry(parent, textvariable=self.analysis_segments_var))
         self._row(parent, "Analysis Max Preview Samples", ttk.Entry(parent, textvariable=self.analysis_preview_var))
 
+        overlay_row = ttk.Frame(parent)
+        overlay_row.pack(fill="x", pady=(0, 6))
+        ttk.Checkbutton(
+            overlay_row,
+            text="Show frequency overlays in Advanced Signal View",
+            variable=self.analysis_overlay_var,
+        ).pack(anchor="w")
+
         ttk.Separator(parent, orient="horizontal").pack(fill="x", pady=6)
 
         self._row(parent, "Quick Check Default Duration (s)", ttk.Entry(parent, textvariable=self.quick_default_duration_var))
@@ -120,6 +129,7 @@ class SettingsWindow:
             "analysis_nfft": self.analysis_nfft_var.get(),
             "analysis_max_segments": self.analysis_segments_var.get(),
             "analysis_max_preview_samples": self.analysis_preview_var.get(),
+            "analysis_show_frequency_overlays": bool(self.analysis_overlay_var.get()),
             "quick_check_default_duration_s": self.quick_default_duration_var.get(),
             "quick_check_max_duration_s": self.quick_max_duration_var.get(),
             "network_timeout_s": self.network_timeout_var.get(),
