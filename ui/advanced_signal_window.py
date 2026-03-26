@@ -2,7 +2,8 @@ import os
 import csv
 import json
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +14,18 @@ from logic.sdr_advanced import build_frequency_axis_mhz, extract_peak_metrics
 from tools.standardpopup import msgPopup
 
 class AdvancedSignalWindow:
-    def __init__(self, root, source_file, analysis, sample_rate_hz, center_freq_hz, on_export=None, settings=None):
+    def __init__(
+        self,
+        root,
+        source_file,
+        analysis,
+        sample_rate_hz,
+        center_freq_hz,
+        on_export=None,
+        settings=None,
+        annotations=None,
+        on_annotations_changed=None,
+    ):
         self.root = root
         self.source_file = source_file
         self.analysis = analysis
@@ -21,6 +33,7 @@ class AdvancedSignalWindow:
         self.center_freq_hz = float(center_freq_hz)
         self.on_export = on_export
         self.settings = settings or {}
+        self.on_annotations_changed = on_annotations_changed
 
         self.popup = newPopup(self.root, name="Advanced Signal View (Interactive)", geometry="1120x760")
 
@@ -39,6 +52,8 @@ class AdvancedSignalWindow:
         self._overlay_artists = []
         self._overlay_label_artists = []
         self._overlay_reference = self._load_frequency_reference()
+        self.annotations = list(annotations or [])
+        self._annotation_artists = []
 
         self._build_ui()
         self._render_initial_plot()
@@ -139,6 +154,10 @@ class AdvancedSignalWindow:
         self.grid_btn.pack(side="left", padx=(10, 2))
         self.peaks_btn = ttk.Button(self.menu_frame, text="Show Peaks", command=self._toggle_peak_markers)
         self.peaks_btn.pack(side="left", padx=2)
+        self.notes_btn = ttk.Button(self.menu_frame, text="Add Note", command=self._add_annotation_from_cursor)
+        self.notes_btn.pack(side="left", padx=(10, 2))
+        self.clear_notes_btn = ttk.Button(self.menu_frame, text="Clear Notes", command=self._clear_annotations)
+        self.clear_notes_btn.pack(side="left", padx=2)
 
         self.save_png_btn = ttk.Button(self.menu_frame, text="Save PNG", command=self._save_png)
         self.save_png_btn.pack(side="right", padx=2)
@@ -156,6 +175,7 @@ class AdvancedSignalWindow:
             linewidth=1.1,
         )
         self._draw_frequency_overlays()
+        self._draw_annotations()
         self.ax_spectrum.set_title("Average Spectrum (FFT)")
         self.ax_spectrum.set_xlabel("Frequency (MHz)")
         self.ax_spectrum.set_ylabel("Power (dB)")
@@ -189,7 +209,88 @@ class AdvancedSignalWindow:
         self.toolbar.update()
 
         self._cid_motion = self.canvas.mpl_connect("motion_notify_event", self._on_mouse_move)
+        self._cid_click = self.canvas.mpl_connect("button_press_event", self._on_mouse_click)
         self.popup.win.protocol("WM_DELETE_WINDOW", self._close)
+
+    def _sync_annotations(self):
+        if self.on_annotations_changed is not None:
+            try:
+                self.on_annotations_changed(self.source_file, list(self.annotations))
+            except Exception:
+                pass
+
+    def _clear_annotation_artists(self):
+        for artist in self._annotation_artists:
+            try:
+                artist.remove()
+            except Exception:
+                continue
+        self._annotation_artists = []
+
+    def _draw_annotations(self):
+        self._clear_annotation_artists()
+        for annotation in self.annotations:
+            try:
+                freq_mhz = float(annotation.get("frequency_mhz"))
+                power_db = float(annotation.get("power_db"))
+                note = str(annotation.get("note", "")).strip()
+            except Exception:
+                continue
+            if not note:
+                continue
+
+            vline = self.ax_spectrum.axvline(freq_mhz, color="#e76f51", linestyle="--", alpha=0.6, linewidth=0.9)
+            label = self.ax_spectrum.annotate(
+                note,
+                (freq_mhz, power_db),
+                textcoords="offset points",
+                xytext=(5, 8),
+                fontsize=8,
+                color="#e76f51",
+                bbox={"facecolor": "#fff3bf", "edgecolor": "#ffd43b", "boxstyle": "round,pad=0.2", "alpha": 0.8},
+            )
+            self._annotation_artists.extend([vline, label])
+
+    def _add_annotation(self, freq_mhz, power_db):
+        note = simpledialog.askstring(
+            "Add Annotation",
+            f"Note for {freq_mhz:.6f} MHz:",
+            parent=self.popup.win,
+        )
+        if note is None:
+            return
+        note = note.strip()
+        if not note:
+            return
+
+        self.annotations.append(
+            {
+                "frequency_mhz": float(freq_mhz),
+                "power_db": float(power_db),
+                "note": note,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+            }
+        )
+        self._draw_annotations()
+        self.canvas.draw_idle()
+        self._sync_annotations()
+
+    def _add_annotation_from_cursor(self):
+        x_min, x_max = self.ax_spectrum.get_xlim()
+        freq_mhz = (x_min + x_max) / 2.0
+        idx = int(np.argmin(np.abs(self.freq_axis_mhz - freq_mhz)))
+        power_db = float(self.spectrum_line.get_ydata()[idx])
+        self._add_annotation(freq_mhz=self.freq_axis_mhz[idx], power_db=power_db)
+
+    def _clear_annotations(self):
+        if not self.annotations:
+            return
+        if not messagebox.askyesno("Clear Annotations", "Remove all annotations for this recording?", parent=self.popup.win):
+            return
+        self.annotations = []
+        self._clear_annotation_artists()
+        self.canvas.draw_idle()
+        self._sync_annotations()
 
     def _smoothed_spectrum(self):
         width = max(1, int(self.smooth_var.get()))
@@ -303,6 +404,7 @@ class AdvancedSignalWindow:
         self.ax_spectrum.relim()
         self.ax_spectrum.autoscale_view()
         self._draw_frequency_overlays()
+        self._draw_annotations()
 
         self.waterfall_image.set_cmap(self.cmap_var.get())
         self.waterfall_image.set_clim(vmin=vmin, vmax=vmax)
@@ -327,6 +429,7 @@ class AdvancedSignalWindow:
         self.ax_spectrum.relim()
         self.ax_spectrum.autoscale_view(scalex=False, scaley=True)
         self._draw_frequency_overlays()
+        self._draw_annotations()
         self.canvas.draw_idle()
 
     def _home(self):
@@ -454,6 +557,17 @@ class AdvancedSignalWindow:
             time_s = float(event.ydata)
             self.status_var.set(f"Waterfall: {self.freq_axis_mhz[idx]:.6f} MHz | {time_s:.3f} s")
 
+    def _on_mouse_click(self, event):
+        if event.inaxes != self.ax_spectrum or event.xdata is None:
+            return
+        if event.button != 3:
+            return
+        idx = int(np.argmin(np.abs(self.freq_axis_mhz - event.xdata)))
+        self._add_annotation(
+            freq_mhz=float(self.freq_axis_mhz[idx]),
+            power_db=float(self.spectrum_line.get_ydata()[idx]),
+        )
+
     def _export_view(self):
         if self.on_export is not None:
             self.on_export(
@@ -467,6 +581,7 @@ class AdvancedSignalWindow:
         try:
             if hasattr(self, "canvas"):
                 self.canvas.mpl_disconnect(self._cid_motion)
+                self.canvas.mpl_disconnect(self._cid_click)
         except Exception:
             pass
         try:

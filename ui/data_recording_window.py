@@ -8,13 +8,26 @@ from logic.recording_metadata import save_samples_and_metadata
 
 
 class DataRecordingWindow:
-    def __init__(self, root, detect_devices_fn, read_samples_fn, run_in_background_fn, append_log_fn, settings=None):
+    def __init__(
+        self,
+        root,
+        detect_devices_fn,
+        read_samples_fn,
+        run_in_background_fn,
+        append_log_fn,
+        settings=None,
+        initial_config=None,
+        on_saved_callback=None,
+    ):
         self.root = root
         self.detect_devices_fn = detect_devices_fn
         self.read_samples_fn = read_samples_fn
         self.run_in_background_fn = run_in_background_fn
         self.append_log_fn = append_log_fn
         self.settings = settings or {}
+        self.initial_config = dict(initial_config or {})
+        self.on_saved_callback = on_saved_callback
+        self._initial_config_applied = False
 
         self.popup = newPopup(self.root, name="Data Recording", geometry="560x430")
         self.devices = []
@@ -31,7 +44,7 @@ class DataRecordingWindow:
         ttk.Label(body, text="Data Recording", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
         ttk.Label(
             body,
-            text="Capture and save RTL-SDR IQ samples with metadata.",
+            text="Capture and save IQ samples from SDR hardware or the built-in virtual network source.",
             justify="left",
         ).pack(anchor="w", pady=(4, 8))
 
@@ -42,6 +55,7 @@ class DataRecordingWindow:
         self.device_combo.pack(side="left", padx=(8, 8), fill="x", expand=True)
         self.refresh_btn = ttk.Button(row1, text="Refresh", command=self._refresh_devices)
         self.refresh_btn.pack(side="right")
+        self.device_combo.bind("<<ComboboxSelected>>", self._on_device_changed)
 
         row2 = ttk.Frame(body)
         row2.pack(fill="x", pady=(0, 4))
@@ -107,6 +121,52 @@ class DataRecordingWindow:
         self.device_combo.current(0)
         self.status_var.set(f"Status: {len(self.devices)} device(s) available")
 
+        if not self._initial_config_applied:
+            self._apply_initial_config()
+
+        self._on_device_changed()
+
+    def _apply_initial_config(self):
+        config = self.initial_config
+        if not config:
+            return
+
+        desired_label = str(config.get("device_label", "")).strip()
+        if desired_label:
+            labels = list(self.device_combo["values"])
+            for index, label in enumerate(labels):
+                if desired_label.lower() in str(label).lower():
+                    self.device_combo.current(index)
+                    break
+
+        if config.get("center_freq_hz") is not None:
+            self.center_var.set(str(int(float(config["center_freq_hz"]))))
+        if config.get("sample_rate_hz") is not None:
+            self.rate_var.set(str(int(float(config["sample_rate_hz"]))))
+        if config.get("gain_db") is not None:
+            self.gain_var.set(str(float(config["gain_db"])))
+        if config.get("duration_s") is not None:
+            self.duration_var.set(str(float(config["duration_s"])))
+        if config.get("tag"):
+            self.tag_var.set(str(config["tag"]))
+
+        self._initial_config_applied = True
+
+    def _on_device_changed(self, _event=None):
+        selected_label = self.device_combo.get().strip()
+        selected_device = next((d for d in self.devices if d["label"] == selected_label), None)
+        if selected_device is None:
+            return
+
+        kind = str(selected_device.get("kind", "rtlsdr")).lower()
+        if kind == "virtual_network":
+            self.center_var.set(str(int(2_437_000_000)))
+            self.rate_var.set(str(int(min(float(self.settings.get("capture_default_sample_rate_hz", 2_048_000)), 3_200_000))))
+            self.gain_var.set(str(float(self.settings.get("capture_default_gain_db", 20.0))))
+            self.tag_var.set("internet_radio_virtual")
+            self.status_var.set("Status: virtual network source selected (WiFi/BT/internet-radio simulation)")
+            self._update_estimate()
+
     def _update_estimate(self):
         try:
             sample_rate_hz = float(self.rate_var.get().strip())
@@ -123,7 +183,7 @@ class DataRecordingWindow:
         selected_label = self.device_combo.get().strip()
         selected_device = next((d for d in self.devices if d["label"] == selected_label), None)
         if selected_device is None:
-            raise ValueError("Please select a valid RTL-SDR device")
+            raise ValueError("Please select a valid capture device")
 
         center_freq_hz = float(self.center_var.get().strip())
         sample_rate_hz = float(self.rate_var.get().strip())
@@ -198,7 +258,7 @@ class DataRecordingWindow:
 
         def do_recording():
             samples = self.read_samples_fn(
-                device_index=config["device"]["index"],
+                device=config["device"],
                 center_freq_hz=config["center_freq_hz"],
                 sample_rate_hz=config["sample_rate_hz"],
                 gain_db=config["gain_db"],
@@ -241,6 +301,13 @@ class DataRecordingWindow:
                 )
 
             self.append_log_fn(f"Recording saved ({result['num_samples']} samples)")
+
+            if self.on_saved_callback is not None:
+                try:
+                    self.on_saved_callback(result)
+                except Exception:
+                    pass
+
             messagebox.showinfo("Data Recording", f"Recording saved to\n{saved_path}")
 
         def on_error(error):

@@ -136,3 +136,4 @@ Thumbs.db
 *.csv
 *.npy
 sample_data/
+data/recordings/

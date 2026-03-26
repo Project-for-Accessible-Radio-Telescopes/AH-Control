@@ -1,0 +1,218 @@
+[
+  {
+    "title": "FM Band Discovery Lab",
+    "objective": "Capture local FM broadcast activity and identify dominant stations with annotations.",
+    "steps": [
+      {
+        "text": "Open recording with FM defaults and capture a short snapshot.",
+        "action": "record",
+        "action_args": {
+          "center_freq_hz": 100000000,
+          "sample_rate_hz": 2048000,
+          "gain_db": 20,
+          "duration_s": 3.0,
+          "tag": "lesson_fm_band"
+        },
+        "hint": "Use the virtual device if no dongle is available.",
+        "expected_outcome": "A new FM-focused recording is saved.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Process all recordings to generate processed summaries.",
+        "action": "process",
+        "hint": "This computes PSD metrics used for quick station detection.",
+        "expected_outcome": "Processed JSON files appear under data/recordings/processed.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Open advanced view for the latest recording and inspect strongest peaks.",
+        "action": "advanced",
+        "hint": "Enable peak markers and compare candidate station frequencies.",
+        "expected_outcome": "You can annotate at least two prominent peaks.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Add annotations to notable peaks and save your project.",
+        "hint": "Right-click near each peak to add a quick note.",
+        "expected_outcome": "Annotations are visible and can be restored from project save."
+      }
+    ]
+  },
+  {
+    "title": "WiFi/Bluetooth RFI Survey",
+    "objective": "Run built-in RFI mapping for common 2.4 GHz and 5 GHz profiles and compare congestion levels.",
+    "steps": [
+      {
+        "text": "Run RFI mapping for WiFi 2.4 GHz profile.",
+        "action": "rfi",
+        "action_args": {
+          "profile": "WiFi 2.4 GHz",
+          "auto_run": true
+        },
+        "hint": "Virtual source can emulate activity if hardware is unavailable.",
+        "expected_outcome": "RFI map plot appears with average power points.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Run RFI mapping for WiFi 5 GHz profile.",
+        "action": "rfi",
+        "action_args": {
+          "profile": "WiFi 5 GHz",
+          "auto_run": true
+        },
+        "hint": "Compare map shape and average level versus 2.4 GHz.",
+        "expected_outcome": "Second map is generated for side-by-side interpretation.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Run RFI mapping for Bluetooth 2.4 GHz profile.",
+        "action": "rfi",
+        "action_args": {
+          "profile": "Bluetooth 2.4 GHz",
+          "auto_run": true
+        },
+        "hint": "Bluetooth profiles typically show narrower hopping-like signatures.",
+        "expected_outcome": "Third map is available for classroom comparison.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Summarize which profile looked most congested and why.",
+        "hint": "Use average dB levels and spread across frequencies in each map.",
+        "expected_outcome": "A short RFI interpretation statement is recorded in class notes."
+      }
+    ]
+  },
+  {
+    "title": "Gain Comparison Challenge",
+    "objective": "Capture low- and high-gain snapshots and quantify the delta spectrum.",
+    "steps": [
+      {
+        "text": "Record a low-gain baseline snapshot.",
+        "action": "record",
+        "action_args": {
+          "center_freq_hz": 2437000000,
+          "sample_rate_hz": 2048000,
+          "gain_db": 10,
+          "duration_s": 2.0,
+          "tag": "lesson_gain_low",
+          "device_label": "virtual"
+        },
+        "hint": "Use same center/rate for both captures.",
+        "expected_outcome": "Low-gain dataset saved.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Record a high-gain snapshot with identical center/rate.",
+        "action": "record",
+        "action_args": {
+          "center_freq_hz": 2437000000,
+          "sample_rate_hz": 2048000,
+          "gain_db": 35,
+          "duration_s": 2.0,
+          "tag": "lesson_gain_high",
+          "device_label": "virtual"
+        },
+        "hint": "Only gain should change between captures.",
+        "expected_outcome": "High-gain dataset saved.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Run compare mode on the latest two recordings.",
+        "action": "compare",
+        "hint": "Inspect B - A delta to identify gain-sensitive regions.",
+        "expected_outcome": "Comparison window shows peak shift and SNR delta.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Open advanced view for the latest recording and annotate one high-delta region.",
+        "action": "advanced",
+        "hint": "Capture one explanatory note for classroom discussion.",
+        "expected_outcome": "At least one annotation is added and visible in spectrum view."
+      }
+    ]
+  },
+  {
+    "title": "Interference Timeline",
+    "objective": "Capture repeated snapshots and compare temporal changes in nearby interference.",
+    "steps": [
+      {
+        "text": "Record a first snapshot now.",
+        "action": "record",
+        "action_args": {
+          "center_freq_hz": 2437000000,
+          "sample_rate_hz": 2048000,
+          "gain_db": 20,
+          "duration_s": 2.0,
+          "tag": "timeline_a",
+          "device_label": "virtual"
+        },
+        "hint": "Wait 30-60 seconds before next step if possible.",
+        "expected_outcome": "First timeline snapshot saved.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Record a second snapshot at the same settings.",
+        "action": "record",
+        "action_args": {
+          "center_freq_hz": 2437000000,
+          "sample_rate_hz": 2048000,
+          "gain_db": 20,
+          "duration_s": 2.0,
+          "tag": "timeline_b",
+          "device_label": "virtual"
+        },
+        "hint": "Keep setup unchanged to isolate time variation.",
+        "expected_outcome": "Second timeline snapshot saved.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Compare the two latest snapshots.",
+        "action": "compare",
+        "hint": "Look for dB shifts and changed peak prominence.",
+        "expected_outcome": "Temporal delta is visible in comparison plot.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Open advanced view and annotate one stable and one changing feature.",
+        "action": "advanced",
+        "expected_outcome": "Two notes are added for stability vs variation discussion."
+      }
+    ]
+  },
+  {
+    "title": "No-Dongle Starter Lesson",
+    "objective": "Complete a full capture-process-analyze cycle using the built-in virtual network source.",
+    "steps": [
+      {
+        "text": "Launch recording preconfigured for built-in virtual source.",
+        "action": "record",
+        "action_args": {
+          "device_label": "virtual",
+          "center_freq_hz": 2437000000,
+          "sample_rate_hz": 2048000,
+          "gain_db": 20,
+          "duration_s": 2.5,
+          "tag": "nodongle_cycle"
+        },
+        "expected_outcome": "A virtual-source recording is saved locally.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Process recordings to compute PSD summaries.",
+        "action": "process",
+        "expected_outcome": "Processed output appears in the processed folder.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Open advanced view and inspect peaks/waterfall.",
+        "action": "advanced",
+        "expected_outcome": "Interactive analysis window opens with latest capture.",
+        "auto_complete_on_action": true
+      },
+      {
+        "text": "Add at least one annotation and save project.",
+        "expected_outcome": "Session can be reopened with annotation preserved."
+      }
+    ]
+  }
+]

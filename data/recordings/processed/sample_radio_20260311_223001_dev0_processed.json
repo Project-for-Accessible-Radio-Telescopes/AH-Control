@@ -1,11 +1,12 @@
 {
   "source_samples": "data/recordings/sample_radio_20260311_223001_dev0.npy",
   "source_metadata": "data/recordings/sample_radio_20260311_223001_dev0.json",
-  "processed_at": "2026-03-12T11:52:09",
+  "processed_at": "2026-03-26T14:33:23",
   "sample_count": 4096000,
   "nfft": 4096,
   "avg_power_linear": 1.1850594282150269,
   "rms_amplitude": 1.0886043310165405,
+  "rms_db": 0.7374011565433343,
   "sample_rate_hz": 2048000.0,
   "center_freq_hz": 100000000.0,
   "gain_db": 20.0,
@@ -35,5 +36,6 @@
         "snr_db": 37.376908916950256
       }
     ]
-  }
+  },
+  "integrity_warnings": []
 }
