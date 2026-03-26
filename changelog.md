@@ -9,6 +9,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ### Added
 - Added changelog tracking for PARTApp.
+- Added Lesson Wizard with classroom-ready templates loaded from `data/lesson_templates.json`.
+- Added side-by-side recording comparison mode with peak, SNR, and delta-spectrum summaries.
+- Added spectrum annotations in Advanced Signal View (right-click notes), with project-level save/load persistence in `.ahf` sessions.
+- Added a built-in virtual network capture device option for users without RTL-SDR hardware.
+- Added an RFI mapping workflow to sweep WiFi/Bluetooth-oriented frequency profiles and plot average power maps.
+- Added app-wide lesson orchestration hooks so templates can launch recording, processing, advanced view, compare mode, and RFI mapping with step-specific payloads.
+- Expanded `data/lesson_templates.json` into richer interactive templates with hints, expected outcomes, auto-complete behavior, and preset action arguments.
 
 ## [0.1.0] - 2026-02-01
 

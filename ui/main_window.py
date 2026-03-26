@@ -15,6 +15,8 @@ from ui.settings_window import SettingsWindow
 from ui.advanced_signal_window import AdvancedSignalWindow
 from ui.health_diagnostics_window import HealthDiagnosticsWindow
 from ui.data_recording_window import DataRecordingWindow
+from ui.lesson_wizard_window import LessonWizardWindow
+from ui.comparison_window import ComparisonWindow
 import webbrowser
 from logic.file_ext import build_session_payload, write_ahf_file, read_ahf_file
 
@@ -42,6 +44,8 @@ class MainWindow:
         self._rtlsdr_cls = None
         self._rtlsdr_import_error = None
         self._spreadsheet_windows = []
+        self._recording_annotations = {}
+        self._recent_recordings = []
 
         # Use CustomMenu manager for popup menus
         self.menu = CustomMenu(self.root)
@@ -210,6 +214,7 @@ class MainWindow:
         self.tools_btn.configure(command=lambda: self.menu.show_menu(self.tools_btn, [
             ("Calibration", self.calibration_tool),
             ("Health Diagnostics", self.health_diagnostics_action),
+            ("Lesson Wizard", self.lesson_wizard_action),
             ("Settings", self.settings_tool),
             ("Local Information", lambda: self.obtain_local_info()),
             ("Create Sample Graph", lambda: plot_basic_graph(self.root, x=[1, 2, 3], y=[1, 4, 9], title="Sample Graph", xlabel="X", ylabel="Y")),
@@ -220,10 +225,90 @@ class MainWindow:
         self.record_btn.pack(side="left")
         self.record_btn.configure(command=lambda: self.menu.show_menu(self.record_btn, [
             ("Begin Data Recording", self.start_recording_menu),
+            ("Run RFI Mapping", self.rfi_mapping_action),
             ("Process Recordings", self.process_recordings_action),
             ("Advanced Signal View", self.advanced_signal_view_action),
+            ("Compare Recordings", self.compare_recordings_action),
             ("Info", lambda: msgPopup("Recording Tools", "Use the 'Begin Data Recording' option to capture data from a connected RTL-SDR device. Use the 'Process Recordings' option to process all existing recordings in the data/recordings directory and generate spectrograms and metadata in the processed subdirectory.")),
         ]))
+
+    def _normalize_recording_path(self, path):
+        if not isinstance(path, str) or not path.strip():
+            return ""
+        return os.path.abspath(os.path.normpath(path))
+
+    def _on_recording_annotations_changed(self, source_file, annotations):
+        key = self._normalize_recording_path(source_file)
+        if not key:
+            return
+        if annotations:
+            self._recording_annotations[key] = list(annotations)
+        elif key in self._recording_annotations:
+            del self._recording_annotations[key]
+
+    def _register_recent_recording(self, samples_path):
+        normalized = self._normalize_recording_path(samples_path)
+        if not normalized:
+            return
+        self._recent_recordings = [path for path in self._recent_recordings if path != normalized]
+        self._recent_recordings.insert(0, normalized)
+        self._recent_recordings = self._recent_recordings[:20]
+
+    def _resolve_latest_recording_path(self):
+        for path in self._recent_recordings:
+            if os.path.exists(path):
+                return path
+
+        recordings_dir = os.path.join("data", "recordings")
+        if not os.path.isdir(recordings_dir):
+            return None
+
+        npy_files = []
+        for name in os.listdir(recordings_dir):
+            if name.lower().endswith(".npy"):
+                full = os.path.join(recordings_dir, name)
+                try:
+                    npy_files.append((os.path.getmtime(full), full))
+                except Exception:
+                    continue
+
+        if not npy_files:
+            return None
+        npy_files.sort(reverse=True)
+        latest = npy_files[0][1]
+        self._register_recent_recording(latest)
+        return latest
+
+    def _resolve_two_latest_recordings(self):
+        candidates = []
+        for path in self._recent_recordings:
+            if os.path.exists(path):
+                candidates.append(path)
+            if len(candidates) >= 2:
+                return candidates[0], candidates[1]
+
+        recordings_dir = os.path.join("data", "recordings")
+        if not os.path.isdir(recordings_dir):
+            return None, None
+
+        npy_files = []
+        for name in os.listdir(recordings_dir):
+            if name.lower().endswith(".npy"):
+                full = os.path.join(recordings_dir, name)
+                try:
+                    npy_files.append((os.path.getmtime(full), full))
+                except Exception:
+                    continue
+
+        npy_files.sort(reverse=True)
+        if len(npy_files) < 2:
+            return None, None
+
+        first = npy_files[0][1]
+        second = npy_files[1][1]
+        self._register_recent_recording(first)
+        self._register_recent_recording(second)
+        return first, second
 
     def _create_content(self, theme="light"):
         if theme == "dark":
@@ -458,6 +543,14 @@ class MainWindow:
                 settings=self._read_settings(),
                 log_entries=self._session_log_entries(),
                 spreadsheet_paths=open_sheet_paths,
+                recording_annotations=[
+                    {
+                        "samples_path": path,
+                        "annotations": notes,
+                    }
+                    for path, notes in self._recording_annotations.items()
+                    if notes
+                ],
             )
             written_path = write_ahf_file(project_path, payload)
             messagebox.showinfo("Save Project", f"Project saved to\n{written_path}")
@@ -487,6 +580,7 @@ class MainWindow:
                 except Exception:
                     continue
             self._spreadsheet_windows = []
+            self._recording_annotations = {}
 
             restored_count = 0
             missing_count = 0
@@ -501,6 +595,15 @@ class MainWindow:
                     self._append_log(f"Missing spreadsheet in project: {csv_path}")
                     missing_count += 1
 
+            restored_annotations = 0
+            for entry in payload.get("recording_annotations", []):
+                samples_path = self._normalize_recording_path(entry.get("samples_path", ""))
+                annotations = entry.get("annotations", [])
+                if not samples_path or not isinstance(annotations, list):
+                    continue
+                self._recording_annotations[samples_path] = list(annotations)
+                restored_annotations += len(annotations)
+
             self._clear_log()
             for line in payload.get("log_entries", []):
                 if isinstance(line, str):
@@ -512,7 +615,8 @@ class MainWindow:
                 (
                     f"Project loaded from\n{project_path}\n\n"
                     f"Spreadsheets restored: {restored_count}\n"
-                    f"Spreadsheets missing: {missing_count}"
+                    f"Spreadsheets missing: {missing_count}\n"
+                    f"Annotations restored: {restored_annotations}"
                 ),
             )
         except Exception as error:
@@ -582,6 +686,126 @@ class MainWindow:
         selector = ttk.Combobox(parent, values=labels, state="readonly")
         selector.current(0)
         return devices, selector
+
+    def _detect_capture_devices(self):
+        devices = self._detect_rtl_sdr_devices()
+        for device in devices:
+            device["kind"] = "rtlsdr"
+
+        devices.append(
+            {
+                "index": -1,
+                "serial": "virtual-internet",
+                "label": "Built-in Internet Radio / WiFi-BT Sensor (Virtual)",
+                "kind": "virtual_network",
+            }
+        )
+        return devices
+
+    def _read_virtual_network_samples(
+        self,
+        center_freq_hz,
+        sample_rate_hz,
+        gain_db,
+        num_samples,
+        chunk_size=None,
+        on_progress=None,
+    ):
+        total_samples = int(num_samples)
+        chunk_size = int(chunk_size or min(262_144, total_samples))
+        if chunk_size <= 0:
+            chunk_size = total_samples
+
+        gain_linear = float(10.0 ** (float(gain_db) / 20.0))
+        rng = np.random.default_rng()
+        chunks = []
+        collected = 0
+
+        while collected < total_samples:
+            remaining = total_samples - collected
+            read_now = min(chunk_size, remaining)
+            t = (np.arange(read_now, dtype=np.float64) + collected) / max(float(sample_rate_hz), 1.0)
+
+            # Base thermal/environmental noise floor.
+            base = 0.015 * (rng.standard_normal(read_now) + 1j * rng.standard_normal(read_now))
+
+            # Simulated bursty channels for WiFi/Bluetooth-like RFI.
+            rf = np.zeros(read_now, dtype=np.complex128)
+            if 2.3e9 <= center_freq_hz <= 2.5e9:
+                wifi_offsets_hz = [-15e6, 0.0, 15e6]
+                bt_offsets_hz = [-7e6, 6e6]
+                envelope = 0.5 * (1.0 + np.sign(np.sin(2.0 * np.pi * 7.0 * t)))
+                for idx, offset in enumerate(wifi_offsets_hz):
+                    amp = (0.08 + 0.02 * idx) * envelope
+                    rf += amp * np.exp(2j * np.pi * offset * t)
+                for idx, offset in enumerate(bt_offsets_hz):
+                    amp = 0.045 + 0.01 * idx
+                    rf += amp * np.exp(2j * np.pi * offset * t)
+            elif 5.0e9 <= center_freq_hz <= 5.95e9:
+                offsets_hz = [-35e6, -10e6, 12e6, 34e6]
+                envelope = 0.5 * (1.0 + np.sign(np.sin(2.0 * np.pi * 3.0 * t)))
+                for idx, offset in enumerate(offsets_hz):
+                    amp = (0.05 + 0.015 * idx) * envelope
+                    rf += amp * np.exp(2j * np.pi * offset * t)
+            else:
+                # Internet-radio-like narrowband activity proxy around center.
+                offsets_hz = [-120e3, -45e3, 30e3, 95e3]
+                for idx, offset in enumerate(offsets_hz):
+                    amp = 0.04 + 0.008 * idx
+                    rf += amp * np.exp(2j * np.pi * offset * t)
+
+            samples = gain_linear * (base + rf)
+            part = np.asarray(samples, dtype=np.complex64)
+            chunks.append(part)
+            collected += int(part.size)
+
+            if on_progress is not None and part.size > 0:
+                try:
+                    on_progress(
+                        {
+                            "samples_collected": collected,
+                            "samples_total": total_samples,
+                            "chunk_rms_db": compute_rms_db(part),
+                        }
+                    )
+                except Exception:
+                    pass
+
+        if not chunks:
+            raise RuntimeError("Virtual network source produced no samples")
+
+        return np.concatenate(chunks)
+
+    def _read_capture_samples(
+        self,
+        device,
+        center_freq_hz,
+        sample_rate_hz,
+        gain_db,
+        num_samples,
+        chunk_size=None,
+        on_progress=None,
+    ):
+        device_kind = str((device or {}).get("kind", "rtlsdr")).lower()
+        if device_kind == "virtual_network":
+            return self._read_virtual_network_samples(
+                center_freq_hz=center_freq_hz,
+                sample_rate_hz=sample_rate_hz,
+                gain_db=gain_db,
+                num_samples=num_samples,
+                chunk_size=chunk_size,
+                on_progress=on_progress,
+            )
+
+        return self._read_sdr_samples(
+            device_index=device["index"],
+            center_freq_hz=center_freq_hz,
+            sample_rate_hz=sample_rate_hz,
+            gain_db=gain_db,
+            num_samples=num_samples,
+            chunk_size=chunk_size,
+            on_progress=on_progress,
+        )
 
     def _read_sdr_samples(
         self,
@@ -766,22 +990,129 @@ class MainWindow:
         )
         self._append_log("Health diagnostics opened")
 
-    def start_recording_menu(self):
-        if self._get_rtlsdr_class() is None:
-            self._show_rtlsdr_dependency_error()
-            self._append_log("Recording unavailable: missing RTL-SDR dependency")
-            return
-
+    def start_recording_menu(self, initial_config=None):
         DataRecordingWindow(
             root=self.root,
-            detect_devices_fn=self._detect_rtl_sdr_devices,
-            read_samples_fn=self._read_sdr_samples,
+            detect_devices_fn=self._detect_capture_devices,
+            read_samples_fn=self._read_capture_samples,
             run_in_background_fn=self._run_in_background,
             append_log_fn=self._append_log,
             settings=self.settings,
+            initial_config=initial_config,
+            on_saved_callback=lambda result: self._register_recent_recording(result.get("samples_path")),
         )
 
         self._append_log("Recording setup opened")
+
+    def rfi_mapping_action(self, profile_preset=None, auto_run=False):
+        popup = newPopup(self.root, name="RFI Mapping", geometry="560x320")
+        container = ttk.Frame(popup.win)
+        container.pack(fill="both", expand=True, padx=12, pady=10)
+
+        ttk.Label(container, text="RFI Mapping", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
+        ttk.Label(
+            container,
+            text="Sweep selected center frequencies and build a quick RFI power map.",
+            justify="left",
+        ).pack(anchor="w", pady=(4, 10))
+
+        devices = self._detect_capture_devices()
+        labels = [device["label"] for device in devices]
+
+        row1 = ttk.Frame(container)
+        row1.pack(fill="x", pady=(0, 8))
+        ttk.Label(row1, text="Device", width=14).pack(side="left")
+        device_combo = ttk.Combobox(row1, state="readonly", values=labels)
+        device_combo.pack(side="left", fill="x", expand=True)
+        if labels:
+            device_combo.current(0)
+
+        profiles = ["WiFi 2.4 GHz", "WiFi 5 GHz", "Bluetooth 2.4 GHz"]
+        row2 = ttk.Frame(container)
+        row2.pack(fill="x", pady=(0, 8))
+        ttk.Label(row2, text="Profile", width=14).pack(side="left")
+        profile_combo = ttk.Combobox(row2, state="readonly", values=profiles)
+        profile_combo.pack(side="left", fill="x", expand=True)
+        profile_combo.current(0)
+        if profile_preset in profiles:
+            profile_combo.set(profile_preset)
+
+        status_var = tk.StringVar(value="Ready")
+        ttk.Label(container, textvariable=status_var).pack(anchor="w", pady=(2, 10))
+
+        def profile_centers_hz(profile_name):
+            if profile_name == "WiFi 2.4 GHz":
+                return [2_412_000_000, 2_437_000_000, 2_462_000_000]
+            if profile_name == "WiFi 5 GHz":
+                return [5_180_000_000, 5_220_000_000, 5_240_000_000, 5_745_000_000, 5_805_000_000]
+            return [2_402_000_000, 2_422_000_000, 2_442_000_000, 2_462_000_000, 2_480_000_000]
+
+        def run_mapping():
+            selected_label = device_combo.get().strip()
+            selected_device = next((d for d in devices if d["label"] == selected_label), None)
+            if selected_device is None:
+                messagebox.showerror("RFI Mapping", "Please select a valid device.")
+                return
+
+            centers = profile_centers_hz(profile_combo.get().strip())
+            sample_rate_hz = float(self.settings.get("capture_default_sample_rate_hz", 2_048_000))
+            gain_db = float(self.settings.get("capture_default_gain_db", 20.0))
+            num_samples = min(262_144, int(self.settings.get("capture_sample_cap", 2_500_000)))
+
+            run_btn.state(["disabled"])
+            status_var.set("Running RFI sweep...")
+
+            def do_work():
+                points = []
+                for index, center in enumerate(centers):
+                    samples = self._read_capture_samples(
+                        device=selected_device,
+                        center_freq_hz=float(center),
+                        sample_rate_hz=sample_rate_hz,
+                        gain_db=gain_db,
+                        num_samples=num_samples,
+                    )
+                    power_db = float(10.0 * np.log10(np.mean(np.abs(samples) ** 2) + 1e-12))
+                    points.append((float(center) / 1e9, power_db))
+                    self.root.after(0, lambda i=index: status_var.set(f"Sweep progress: {i + 1}/{len(centers)}"))
+                return points
+
+            def on_success(points):
+                status_var.set("RFI mapping complete")
+                run_btn.state(["!disabled"])
+
+                xs = [p[0] for p in points]
+                ys = [p[1] for p in points]
+
+                fig, ax = plt.subplots(figsize=(8.0, 4.5), dpi=100)
+                ax.plot(xs, ys, marker="o", color="#e76f51", linewidth=1.2)
+                ax.set_title(f"RFI Map - {profile_combo.get().strip()}")
+                ax.set_xlabel("Center Frequency (GHz)")
+                ax.set_ylabel("Average Power (dB)")
+                ax.grid(alpha=0.25)
+                fig.tight_layout()
+                fig.show()
+
+                self._append_log(
+                    f"RFI mapping complete using {selected_device['label']} ({profile_combo.get().strip()})"
+                )
+
+            def on_error(error):
+                status_var.set("RFI mapping failed")
+                run_btn.state(["!disabled"])
+                messagebox.showerror("RFI Mapping", f"Mapping failed:\n{error}")
+                self._append_log("RFI mapping failed")
+
+            self._run_in_background(do_work, on_success=on_success, on_error=on_error)
+
+        controls = ttk.Frame(container)
+        controls.pack(fill="x")
+        run_btn = ttk.Button(controls, text="Run Mapping", command=run_mapping)
+        run_btn.pack(side="left")
+        ttk.Button(controls, text="Close", command=popup.win.destroy).pack(side="right")
+
+        if auto_run:
+            self.root.after(50, run_mapping)
 
     def settings_tool(self):
         SettingsWindow(
@@ -825,9 +1156,11 @@ class MainWindow:
 
             messagebox.showinfo("Process Recordings", "\n".join(summary_lines))
             self._append_log(f"Processed recordings: {processed_count}")
+            return result
         except Exception as error:
             messagebox.showerror("Process Recordings", f"Processing failed: {error}")
             self._append_log("Processing failed")
+            return None
 
     def _open_static_advanced_signal_view_popup(self, source_file, analysis, sample_rate_hz, center_freq_hz):
         popup = newPopup(self.root, name="Advanced Signal View", geometry="980x700")
@@ -889,6 +1222,7 @@ class MainWindow:
         popup.win.protocol("WM_DELETE_WINDOW", lambda: (plt.close(fig), popup.win.destroy()))
 
     def _open_interactive_advanced_signal_view_window(self, source_file, analysis, sample_rate_hz, center_freq_hz):
+        source_key = self._normalize_recording_path(source_file)
         AdvancedSignalWindow(
             root=self.root,
             source_file=source_file,
@@ -897,18 +1231,135 @@ class MainWindow:
             center_freq_hz=center_freq_hz,
             on_export=self._open_static_advanced_signal_view_popup,
             settings=self.settings,
+            annotations=self._recording_annotations.get(source_key, []),
+            on_annotations_changed=self._on_recording_annotations_changed,
         )
 
-    def advanced_signal_view_action(self):
-        default_dir = os.path.join("data", "recordings")
-        samples_path = filedialog.askopenfilename(
-            title="Open Recording for Advanced View",
-            initialdir=default_dir if os.path.isdir(default_dir) else None,
-            filetypes=[("NumPy Recording", "*.npy"), ("All Files", "*.*")],
-        )
+    def _lesson_open_recording(self, step_payload=None):
+        self.start_recording_menu(initial_config=step_payload or {})
 
+    def _lesson_process_recordings(self, _step_payload=None):
+        self.process_recordings_action()
+
+    def _lesson_open_advanced_view(self, step_payload=None):
+        payload = step_payload or {}
+        samples_path = payload.get("samples_path")
         if not samples_path:
+            samples_path = self._resolve_latest_recording_path()
+        if not samples_path:
+            messagebox.showwarning("Lesson Wizard", "No recordings available yet. Please record first.")
             return
+        self.advanced_signal_view_action(samples_path=samples_path)
+
+    def _lesson_compare_recordings(self, step_payload=None):
+        payload = step_payload or {}
+        first = payload.get("first_samples_path")
+        second = payload.get("second_samples_path")
+        if not first or not second:
+            first, second = self._resolve_two_latest_recordings()
+        if not first or not second:
+            messagebox.showwarning("Lesson Wizard", "Need at least two recordings to compare.")
+            return
+        self.compare_recordings_action(first_path=first, second_path=second)
+
+    def _lesson_run_rfi(self, step_payload=None):
+        payload = step_payload or {}
+        profile = payload.get("profile")
+        auto_run = bool(payload.get("auto_run", False))
+        self.rfi_mapping_action(profile_preset=profile, auto_run=auto_run)
+
+    def lesson_wizard_action(self):
+        LessonWizardWindow(
+            root=self.root,
+            templates_path=os.path.join("data", "lesson_templates.json"),
+            on_open_recording=self._lesson_open_recording,
+            on_process_recordings=self._lesson_process_recordings,
+            on_open_advanced_view=self._lesson_open_advanced_view,
+            on_compare_recordings=self._lesson_compare_recordings,
+            on_run_rfi_mapping=self._lesson_run_rfi,
+        )
+        self._append_log("Lesson wizard opened")
+
+    def compare_recordings_action(self, first_path=None, second_path=None):
+        default_dir = os.path.join("data", "recordings")
+        if not first_path:
+            first_path = filedialog.askopenfilename(
+                title="Select First Recording",
+                initialdir=default_dir if os.path.isdir(default_dir) else None,
+                filetypes=[("NumPy Recording", "*.npy"), ("All Files", "*.*")],
+            )
+            if not first_path:
+                return
+
+        if not second_path:
+            second_path = filedialog.askopenfilename(
+                title="Select Second Recording",
+                initialdir=os.path.dirname(first_path),
+                filetypes=[("NumPy Recording", "*.npy"), ("All Files", "*.*")],
+            )
+            if not second_path:
+                return
+
+        self._register_recent_recording(first_path)
+        self._register_recent_recording(second_path)
+
+        status_popup = newPopup(self.root, name="Comparison", geometry="380x120")
+        ttk.Label(status_popup.win, text="Analyzing two recordings...", anchor="center").pack(fill="x", padx=12, pady=(16, 6))
+        ttk.Label(status_popup.win, text=f"{os.path.basename(first_path)} vs {os.path.basename(second_path)}", anchor="center").pack(fill="x", padx=12, pady=(0, 12))
+
+        def do_compare():
+            left = analyze_recording_for_advanced_view(
+                samples_path=first_path,
+                nfft=int(self.settings.get("analysis_nfft", 4096)),
+                max_segments=int(self.settings.get("analysis_max_segments", 350)),
+                max_preview_samples=int(self.settings.get("analysis_max_preview_samples", 8_000_000)),
+            )
+            right = analyze_recording_for_advanced_view(
+                samples_path=second_path,
+                nfft=int(self.settings.get("analysis_nfft", 4096)),
+                max_segments=int(self.settings.get("analysis_max_segments", 350)),
+                max_preview_samples=int(self.settings.get("analysis_max_preview_samples", 8_000_000)),
+            )
+            return {"left": left, "right": right}
+
+        def on_success(result):
+            try:
+                status_popup.win.destroy()
+            except Exception:
+                pass
+
+            ComparisonWindow(
+                root=self.root,
+                left_file=first_path,
+                right_file=second_path,
+                left_result=result["left"],
+                right_result=result["right"],
+            )
+            self._append_log(f"Comparison opened: {os.path.basename(first_path)} vs {os.path.basename(second_path)}")
+
+        def on_error(error):
+            try:
+                status_popup.win.destroy()
+            except Exception:
+                pass
+            messagebox.showerror("Compare Recordings", f"Could not compare recordings:\n{error}")
+            self._append_log("Comparison failed")
+
+        self._run_in_background(do_compare, on_success=on_success, on_error=on_error)
+
+    def advanced_signal_view_action(self, samples_path=None):
+        if not samples_path:
+            default_dir = os.path.join("data", "recordings")
+            samples_path = filedialog.askopenfilename(
+                title="Open Recording for Advanced View",
+                initialdir=default_dir if os.path.isdir(default_dir) else None,
+                filetypes=[("NumPy Recording", "*.npy"), ("All Files", "*.*")],
+            )
+
+            if not samples_path:
+                return
+
+        self._register_recent_recording(samples_path)
 
         status_popup = newPopup(self.root, name="Advanced Signal View", geometry="380x120")
         ttk.Label(status_popup.win, text="Analyzing recording...", anchor="center").pack(fill="x", padx=12, pady=(16, 6))
