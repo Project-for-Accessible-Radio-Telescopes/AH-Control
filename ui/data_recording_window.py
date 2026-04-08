@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 from tools.popup import newPopup
+from logic.sdr_processing import compute_power_spectrum_welch_from_sdr
+from logic.rtl_sdr_recording import get_rtlsdr_class, detect_rtl_sdr_devices
+from logic.wifi_scanner import scan_wifi_networks, convert_networks_to_spectrum, networks_to_dataframe
 
 
 class DataRecordingWindow:
@@ -30,9 +33,10 @@ class DataRecordingWindow:
 		self.initial_config = initial_config or {}
 		self.on_saved_callback = on_saved_callback
 
-		self.popup = newPopup(self.root, name="Data Recording", geometry="980x660")
-		self._scan_running = False
-		self._last_scan_result = None
+		self.popup = newPopup(self.root, name="Power Spectrum Analysis", geometry="980x720")
+		self._acquisition_running = False
+		self._last_spectrum_result = None
+		self._available_devices = []
 
 		self._build_ui()
 		self.popup.win.protocol("WM_DELETE_WINDOW", self._close)
@@ -41,10 +45,10 @@ class DataRecordingWindow:
 		container = ttk.Frame(self.popup.win)
 		container.pack(fill="both", expand=True, padx=12, pady=10)
 
-		ttk.Label(container, text="Frequency Scan Recording", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
+		ttk.Label(container, text="Power Spectrum Analysis (Welch Method)", font=("TkDefaultFont", 10, "bold")).pack(anchor="w")
 		ttk.Label(
 			container,
-			text="Scan a frequency range, view the power plot, and save the scan data to disk.",
+			text="Acquire samples and compute power spectrum using Welch's method for improved frequency resolution.",
 			justify="left",
 		).pack(anchor="w", pady=(4, 8))
 
@@ -52,153 +56,255 @@ class DataRecordingWindow:
 		form.pack(fill="x", pady=(0, 8))
 
 		default_center = float(self.settings.get("capture_default_center_freq_hz", 1_450_000_000.0))
-		start_default = float(self.initial_config.get("start_freq_hz", max(1_000.0, default_center - 250_000_000.0)))
-		end_default = float(self.initial_config.get("end_freq_hz", default_center + 250_000_000.0))
 
-		self.start_freq_var = tk.StringVar(value=str(int(start_default)))
-		self.end_freq_var = tk.StringVar(value=str(int(end_default)))
-		self.points_var = tk.StringVar(value=str(int(self.initial_config.get("num_points", 100))))
+		self.center_freq_var = tk.StringVar(value=str(int(self.initial_config.get("center_freq_hz", default_center))))
 		self.sample_rate_var = tk.StringVar(value=str(float(self.initial_config.get("sample_rate_hz", 2_400_000.0))))
-		self.samples_per_point_var = tk.StringVar(value=str(int(self.initial_config.get("samples_per_point", 256 * 1024))))
-		self.device_index_var = tk.StringVar(value=str(int(self.initial_config.get("device_index", 0))))
-		self.gain_var = tk.StringVar(value=str(self.initial_config.get("gain", "auto")))
+		self.n_per_seg_var = tk.StringVar(value=str(int(self.initial_config.get("n_per_seg", 4096))))
+		self.n_segs_var = tk.StringVar(value=str(int(self.initial_config.get("n_segs", 10))))
+		self.gain_var = tk.StringVar(value=str(self.initial_config.get("gain", "32")))
 		self.source_var = tk.StringVar(value=str(self.initial_config.get("source", "RTL-SDR")))
 
 		row1 = ttk.Frame(form)
 		row1.pack(fill="x", pady=(0, 4))
-		ttk.Label(row1, text="Start Freq (Hz)", width=16).pack(side="left")
-		ttk.Entry(row1, textvariable=self.start_freq_var, width=16).pack(side="left", padx=(0, 10))
-		ttk.Label(row1, text="End Freq (Hz)", width=14).pack(side="left")
-		ttk.Entry(row1, textvariable=self.end_freq_var, width=16).pack(side="left", padx=(0, 10))
-		ttk.Label(row1, text="Points", width=8).pack(side="left")
-		ttk.Entry(row1, textvariable=self.points_var, width=8).pack(side="left")
+		ttk.Label(row1, text="Center Freq (Hz)", width=16).pack(side="left")
+		ttk.Entry(row1, textvariable=self.center_freq_var, width=16).pack(side="left", padx=(0, 10))
+		ttk.Label(row1, text="Sample Rate (Hz)", width=14).pack(side="left")
+		ttk.Entry(row1, textvariable=self.sample_rate_var, width=16).pack(side="left", padx=(0, 10))
+		ttk.Label(row1, text="Gain (dB)", width=8).pack(side="left")
+		ttk.Entry(row1, textvariable=self.gain_var, width=8).pack(side="left")
 
 		row2 = ttk.Frame(form)
 		row2.pack(fill="x", pady=(0, 4))
-		ttk.Label(row2, text="Sample Rate (Hz)", width=16).pack(side="left")
-		ttk.Entry(row2, textvariable=self.sample_rate_var, width=16).pack(side="left", padx=(0, 10))
-		ttk.Label(row2, text="Samples/Point", width=14).pack(side="left")
-		ttk.Entry(row2, textvariable=self.samples_per_point_var, width=16).pack(side="left", padx=(0, 10))
-		ttk.Label(row2, text="Gain", width=8).pack(side="left")
-		ttk.Entry(row2, textvariable=self.gain_var, width=8).pack(side="left")
-
-		row3 = ttk.Frame(form)
-		row3.pack(fill="x", pady=(0, 4))
-		ttk.Label(row3, text="Source", width=16).pack(side="left")
+		ttk.Label(row2, text="Samples/Segment", width=16).pack(side="left")
+		ttk.Entry(row2, textvariable=self.n_per_seg_var, width=16).pack(side="left", padx=(0, 10))
+		ttk.Label(row2, text="Num Segments", width=14).pack(side="left")
+		ttk.Entry(row2, textvariable=self.n_segs_var, width=16).pack(side="left", padx=(0, 10))
+		ttk.Label(row2, text="Source", width=8).pack(side="left")
 		source_combo = ttk.Combobox(
-			row3,
+			row2,
 			state="readonly",
 			textvariable=self.source_var,
 			values=["RTL-SDR", "Virtual"],
-			width=13,
+			width=8,
 		)
 		source_combo.pack(side="left", padx=(0, 10))
-		ttk.Label(row3, text="Device Index", width=14).pack(side="left")
-		ttk.Entry(row3, textvariable=self.device_index_var, width=8).pack(side="left", padx=(0, 10))
+		source_combo.bind("<<ComboboxSelected>>", self._on_source_changed)
+
+		self.device_frame = ttk.Frame(form)
+		self.device_frame.pack(fill="x", pady=(0, 4))
+		self.device_label = ttk.Label(self.device_frame, text="Device", width=16)
+		self.device_label.pack(side="left")
+		self.device_combo = ttk.Combobox(self.device_frame, state="readonly", width=40)
+		self.device_combo.pack(side="left", padx=(0, 10))
+		
+		# Show device frame and detect devices if RTL-SDR is default source
+		if self.source_var.get() == "RTL-SDR":
+			self.device_frame.pack(fill="x", pady=(0, 4))
+			self._detect_and_populate_devices()
+		else:
+			self.device_frame.pack_forget()
 
 		self.status_var = tk.StringVar(value="Status: ready")
 		ttk.Label(container, textvariable=self.status_var).pack(anchor="w", pady=(2, 6))
 
 		actions = ttk.Frame(container)
 		actions.pack(fill="x", pady=(0, 8))
-		self.scan_btn = ttk.Button(actions, text="Start Scan", command=self._start_scan)
-		self.scan_btn.pack(side="left")
-		self.save_btn = ttk.Button(actions, text="Save Scan", command=self._save_scan, state="disabled")
+		self.acquire_btn = ttk.Button(actions, text="Compute Spectrum", command=self._start_acquisition)
+		self.acquire_btn.pack(side="left")
+		self.save_btn = ttk.Button(actions, text="Save Spectrum", command=self._save_spectrum, state="disabled")
 		self.save_btn.pack(side="left", padx=(8, 0))
 		ttk.Button(actions, text="Close", command=self._close).pack(side="right")
 
 		self.progress = ttk.Progressbar(container, mode="indeterminate")
 		self.progress.pack(fill="x", pady=(0, 8))
 
-		self.figure, self.axis = plt.subplots(figsize=(9.2, 4.5), dpi=100)
-		self.axis.set_xlabel("Frequency (GHz)")
-		self.axis.set_ylabel("Power (dB)")
-		self.axis.set_title("RTL-SDR Frequency Scan")
+		self.figure, self.axis = plt.subplots(figsize=(9.2, 5), dpi=100)
+		self.axis.set_xlabel("Frequency (MHz)")
+		self.axis.set_ylabel("Power (dBm)")
+		self.axis.set_title("Power Spectrum (Welch Method)")
 		self.axis.grid(True, alpha=0.25)
 
 		self.canvas = FigureCanvasTkAgg(self.figure, master=container)
 		self.canvas.draw()
 		self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
-	def _parse_scan_config(self):
-		start_freq_hz = float(self.start_freq_var.get().strip())
-		end_freq_hz = float(self.end_freq_var.get().strip())
-		num_points = int(self.points_var.get().strip())
+	def _on_source_changed(self, event=None):
+		"""Handle source selection change. Detect devices only for RTL-SDR."""
+		source = self.source_var.get()
+		
+		if source == "RTL-SDR":
+			# Show device frame and detect devices
+			self.device_frame.pack(fill="x", pady=(0, 4), after=self.device_frame.master.winfo_children()[-2] if self.device_frame.master.winfo_children() else None)
+			self._detect_and_populate_devices()
+		else:
+			# Hide device frame for Virtual source
+			self.device_frame.pack_forget()
+			self.append_log_fn(f"Source changed to {source} (WiFi frequency scanning)")
+
+	def _detect_and_populate_devices(self):
+		"""Detect RTL-SDR devices and populate device dropdown."""
+		try:
+			self._available_devices = detect_rtl_sdr_devices()
+			if len(self._available_devices) > 0:
+				device_labels = [dev["label"] for dev in self._available_devices]
+				self.device_combo["values"] = device_labels
+				self.device_combo.current(0)
+				self.append_log_fn(f"Detected {len(self._available_devices)} RTL-SDR device(s)")
+			else:
+				self.device_combo["values"] = ["No devices detected"]
+				self.device_combo.current(0)
+				self.append_log_fn("No RTL-SDR devices detected")
+		except Exception as err:
+			self.device_combo["values"] = [f"Error: {str(err)[:30]}..."]
+			self.device_combo.current(0)
+			self.append_log_fn(f"Device detection error: {err}")
+
+	def _parse_spectrum_config(self):
+		center_freq_hz = float(self.center_freq_var.get().strip())
 		sample_rate_hz = float(self.sample_rate_var.get().strip())
-		samples_per_point = int(self.samples_per_point_var.get().strip())
-		device_index = int(self.device_index_var.get().strip())
+		n_per_seg = int(self.n_per_seg_var.get().strip())
+		n_segs = int(self.n_segs_var.get().strip())
 		source = self.source_var.get().strip() or "RTL-SDR"
 		gain_raw = self.gain_var.get().strip()
 
-		if not (start_freq_hz > 0 and end_freq_hz > 0):
-			raise ValueError("Frequencies must be positive")
-		if end_freq_hz <= start_freq_hz:
-			raise ValueError("End frequency must be greater than start frequency")
-		if num_points < 2:
-			raise ValueError("Points must be at least 2")
+		if not center_freq_hz > 0:
+			raise ValueError("Center frequency must be positive")
 		if sample_rate_hz < 1_000 or sample_rate_hz > 3_200_000:
 			raise ValueError("Sample rate must be between 1,000 and 3,200,000 Hz")
-		if samples_per_point < 8_192:
-			raise ValueError("Samples per point must be at least 8192")
+		if n_per_seg < 256:
+			raise ValueError("Samples per segment must be at least 256")
+		if n_segs < 1:
+			raise ValueError("Number of segments must be at least 1")
 
-		max_center_freq_hz = float(self.settings.get("rtlsdr_max_center_freq_hz", 1_766_000_000.0))
-		if end_freq_hz > max_center_freq_hz:
-			raise ValueError(
-				f"End frequency must be <= {int(max_center_freq_hz)} Hz for RTL-SDR (about 1.7 GHz)"
-			)
+		# Only enforce frequency limit for RTL-SDR source
+		if source.lower() == "rtl-sdr":
+			max_center_freq_hz = float(self.settings.get("rtlsdr_max_center_freq_hz", 1_766_000_000.0))
+			if center_freq_hz > max_center_freq_hz:
+				raise ValueError(
+					f"Center frequency must be <= {int(max_center_freq_hz)} Hz for RTL-SDR (about 1.7 GHz)"
+				)
 
-		if gain_raw.lower() == "auto":
-			gain = "auto"
-		else:
+		try:
 			gain = float(gain_raw)
+		except ValueError:
+			gain = 32.0
+
+		device_index = 0
+		if len(self._available_devices) > 0:
+			device_label = self.device_combo.get()
+			for dev in self._available_devices:
+				if dev["label"] == device_label:
+					device_index = dev["index"]
+					break
 
 		return {
-			"start_freq_hz": start_freq_hz,
-			"end_freq_hz": end_freq_hz,
-			"num_points": num_points,
+			"center_freq_hz": center_freq_hz,
 			"sample_rate_hz": sample_rate_hz,
-			"samples_per_point": samples_per_point,
+			"n_per_seg": n_per_seg,
+			"n_segs": n_segs,
 			"device_index": device_index,
 			"source": source,
 			"gain": gain,
 		}
 
-	def _scan_virtual(self, frequencies_hz):
-		center = (float(frequencies_hz[0]) + float(frequencies_hz[-1])) / 2.0
-		width = max((float(frequencies_hz[-1]) - float(frequencies_hz[0])) / 8.0, 1.0)
+	def _generate_virtual_spectrum(self, sample_rate, center_freq, n_per_seg):
+		"""Generate WiFi frequency spectrum using real network scanning."""
+		try:
+			# Attempt real WiFi scanning
+			networks = scan_wifi_networks()
+			self.append_log_fn(f"Real WiFi scan: detected {len(networks)} network(s)")
+			
+			# Log detected networks
+			self.append_log_fn(networks_to_dataframe(networks))
+			
+			# Convert to spectrum
+			frequencies_mhz, pxx = convert_networks_to_spectrum(
+				networks, sample_rate, center_freq, n_per_seg
+			)
+			
+			return frequencies_mhz, pxx
+		
+		except Exception as err:
+			# Fall back to synthetic spectrum if real scanning fails
+			self.append_log_fn(f"Real WiFi scan failed: {err}. Using synthetic spectrum.")
+			return self._generate_synthetic_spectrum(sample_rate, center_freq, n_per_seg)
 
-		power_levels_db = []
-		for freq_hz in frequencies_hz:
-			noise_floor_db = -58.0 + np.random.normal(loc=0.0, scale=1.3)
-			peak_boost_db = 16.0 * np.exp(-0.5 * ((float(freq_hz) - center) / width) ** 2)
-			power_levels_db.append(float(noise_floor_db + peak_boost_db))
+	def _generate_synthetic_spectrum(self, sample_rate, center_freq, n_per_seg):
+		"""Generate synthetic WiFi frequency spectrum (fallback)."""
+		samples = np.random.randn(n_per_seg) + 1j * np.random.randn(n_per_seg)
+		
+		# Add strong WiFi channel peaks for visibility
+		wifi_peaks = [
+			(2_412_000_000, -50),  # 2.4 GHz Channel 1, strong signal
+			(2_437_000_000, -55),  # 2.4 GHz Channel 6, medium signal
+			(2_462_000_000, -62),  # 2.4 GHz Channel 11, weaker signal
+			(5_180_000_000, -45),  # 5 GHz Channel 36, strong signal
+			(5_240_000_000, -60),  # 5 GHz Channel 48, medium signal
+			(5_500_000_000, -70),  # 5 GHz Channel 100, weak signal
+			(5_745_000_000, -58),  # 5 GHz Channel 149, medium signal
+		]
+		
+		# Add peaks that fall within the current frequency band
+		for peak_freq, rssi_dbm in wifi_peaks:
+			if abs(peak_freq - center_freq) < sample_rate / 2:
+				# Calculate offset in sample space
+				freq_offset = peak_freq - center_freq
+				bin_normalized = freq_offset / sample_rate
+				bin_index = int((bin_normalized + 0.5) * n_per_seg)
+				
+				if 0 <= bin_index < n_per_seg:
+					# Convert dBm to amplitude
+					amplitude = np.sqrt(10 ** (rssi_dbm / 10)) * 3  # 3x amplification
+					peak_width = max(20, n_per_seg // 50)  # Wider peaks
+					start = max(0, bin_index - peak_width)
+					end = min(n_per_seg, bin_index + peak_width)
+					
+					peak_pos = np.arange(start, end, dtype=float)
+					sigma = peak_width / 2.5
+					gaussian = np.exp(-((peak_pos - bin_index) ** 2) / (2 * sigma ** 2))
+					
+					samples[start:end] += amplitude * gaussian * np.exp(1j * np.random.randn(end - start))
+		
+		from scipy.fft import fftshift
+		from scipy import signal
+		
+		frequencies, pxx = signal.welch(samples, fs=sample_rate, nperseg=n_per_seg, window='hann')
+		
+		# Convert to dBm for better visibility
+		pxx_dbm = 10 * np.log10(pxx + 1e-12)
+		
+		frequencies_mhz = (frequencies + center_freq) / 1e6
+		frequencies_mhz = fftshift(frequencies_mhz)
+		pxx_dbm = fftshift(pxx_dbm)
+		
+		return frequencies_mhz, pxx_dbm
 
-		return np.asarray(power_levels_db, dtype=np.float64)
-
-	def _scan_rtlsdr(self, config, frequencies_hz):
+	def _acquire_sdr_spectrum(self, config):
+		"""Acquire spectrum from RTL-SDR device using Welch method."""
 		try:
 			from rtlsdr import RtlSdr
 		except Exception as error:
-			raise RuntimeError("RTL-SDR dependency is unavailable. Install pyrtlsdr and librtlsdr.") from error
+			raise RuntimeError("RTL-SDR dependency unavailable. Install pyrtlsdr and librtlsdr.") from error
 
 		sdr = None
 		try:
 			sdr = RtlSdr(device_index=int(config["device_index"]))
 			sdr.sample_rate = float(config["sample_rate_hz"])
-			sdr.gain = config["gain"]
+			sdr.center_freq = int(config["center_freq_hz"])
+			sdr.gain = float(config["gain"])
 
-			power_levels_db = []
-			for freq in frequencies_hz:
-				sdr.center_freq = int(freq)
-				samples = sdr.read_samples(int(config["samples_per_point"]))
-				samples_arr = np.asarray(samples, dtype=np.complex64)
-				if samples_arr.size == 0:
-					raise RuntimeError("RTL-SDR returned no samples")
+			# Compute spectrum using Welch method from SDR
+			frequencies_mhz, pxx = compute_power_spectrum_welch_from_sdr(
+				sdr,
+				sample_rate=float(config["sample_rate_hz"]),
+				centre_freq=int(config["center_freq_hz"]),
+				n_per_seg=int(config["n_per_seg"]),
+				n_segs=int(config["n_segs"]),
+				bias_tee=False
+			)
+			
+			return frequencies_mhz, pxx
 
-				power_linear = np.mean(np.abs(samples_arr) ** 2)
-				power_levels_db.append(float(10.0 * np.log10(float(power_linear) + 1e-12)))
-
-			return np.asarray(power_levels_db, dtype=np.float64)
 		finally:
 			if sdr is not None:
 				try:
@@ -206,76 +312,80 @@ class DataRecordingWindow:
 				except Exception:
 					pass
 
-	def _start_scan(self):
-		if self._scan_running:
+	def _start_acquisition(self):
+		if self._acquisition_running:
 			return
 
 		try:
-			config = self._parse_scan_config()
+			config = self._parse_spectrum_config()
 		except ValueError as error:
-			messagebox.showerror("Data Recording", f"Invalid input: {error}")
+			messagebox.showerror("Power Spectrum Analysis", f"Invalid input: {error}")
 			return
 
-		frequencies_hz = np.linspace(config["start_freq_hz"], config["end_freq_hz"], config["num_points"])
-
-		self._scan_running = True
-		self.scan_btn.state(["disabled"])
+		self._acquisition_running = True
+		self.acquire_btn.state(["disabled"])
 		self.save_btn.state(["disabled"])
 		self.progress.start(10)
-		self.status_var.set("Status: scanning frequency range...")
+		self.status_var.set("Status: computing spectrum...")
 
-		def do_scan():
+		def do_acquisition():
 			if config["source"].lower() == "virtual":
-				power_levels_db = self._scan_virtual(frequencies_hz)
+				frequencies_mhz, pxx = self._generate_virtual_spectrum(
+					config["sample_rate_hz"],
+					config["center_freq_hz"],
+					config["n_per_seg"]
+				)
 			else:
-				power_levels_db = self._scan_rtlsdr(config, frequencies_hz)
+				frequencies_mhz, pxx = self._acquire_sdr_spectrum(config)
 
 			return {
 				"config": config,
-				"frequencies_hz": np.asarray(frequencies_hz, dtype=np.float64),
-				"power_levels_db": np.asarray(power_levels_db, dtype=np.float64),
+				"frequencies_mhz": np.asarray(frequencies_mhz, dtype=np.float64),
+				"pxx": np.asarray(pxx, dtype=np.float64),
 			}
 
 		def on_success(result):
-			self._last_scan_result = result
-			self._render_plot(result["frequencies_hz"], result["power_levels_db"])
+			self._last_spectrum_result = result
+			self._render_plot(result["frequencies_mhz"], result["pxx"])
 
+			freq_range = (result["frequencies_mhz"].max() - result["frequencies_mhz"].min())
 			self.status_var.set(
-				"Status: scan complete "
-				f"({result['config']['num_points']} points from "
-				f"{result['config']['start_freq_hz'] / 1e9:.3f} to {result['config']['end_freq_hz'] / 1e9:.3f} GHz)"
+				"Status: spectrum computed "
+				f"({result['config']['n_segs']} segments, "
+				f"range: {freq_range:.3f} MHz)"
 			)
 			self.save_btn.state(["!disabled"])
 			self.append_log_fn(
-				"Frequency scan complete "
-				f"({result['config']['num_points']} pts, source={result['config']['source']})"
+				"Spectrum computed: "
+				f"{result['config']['n_segs']} segments @ "
+				f"{result['config']['sample_rate_hz']/1e6:.2f} MS/s"
 			)
 
 		def on_error(error):
-			self.status_var.set("Status: scan failed")
-			messagebox.showerror("Data Recording", f"Scan failed: {error}")
-			self.append_log_fn(f"Frequency scan failed: {error}")
+			self.status_var.set("Status: spectrum failed")
+			messagebox.showerror("Power Spectrum Analysis", f"Acquisition failed: {error}")
+			self.append_log_fn(f"Spectrum acquisition failed: {error}")
 
 		def on_finally():
-			self._scan_running = False
-			self.scan_btn.state(["!disabled"])
+			self._acquisition_running = False
+			self.acquire_btn.state(["!disabled"])
 			self.progress.stop()
 
-		self.run_in_background_fn(do_scan, on_success=on_success, on_error=on_error, on_finally=on_finally)
+		self.run_in_background_fn(do_acquisition, on_success=on_success, on_error=on_error, on_finally=on_finally)
 
-	def _render_plot(self, frequencies_hz, power_levels_db):
+	def _render_plot(self, frequencies_mhz, pxx):
 		self.axis.clear()
-		self.axis.plot(frequencies_hz / 1e9, power_levels_db, color="#0b7285", linewidth=1.2)
-		self.axis.set_xlabel("Frequency (GHz)")
-		self.axis.set_ylabel("Power (dB)")
-		self.axis.set_title("RTL-SDR Frequency Scan")
+		self.axis.plot(frequencies_mhz, pxx, color="#0b7285", linewidth=1.0)
+		self.axis.set_xlabel("Frequency (MHz)")
+		self.axis.set_ylabel("Power (dBm)")
+		self.axis.set_title("Power Spectrum (Welch Method)")
 		self.axis.grid(True, alpha=0.25)
 		self.figure.tight_layout()
 		self.canvas.draw_idle()
 
-	def _save_scan(self):
-		if not self._last_scan_result:
-			messagebox.showerror("Data Recording", "No scan is available to save yet.")
+	def _save_spectrum(self):
+		if not self._last_spectrum_result:
+			messagebox.showerror("Power Spectrum Analysis", "No spectrum available to save yet.")
 			return
 
 		output_dir = filedialog.askdirectory(
@@ -289,40 +399,35 @@ class DataRecordingWindow:
 		os.makedirs(output_dir, exist_ok=True)
 
 		timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-		base_name = f"frequency_scan_{timestamp}"
-		samples_path = os.path.join(output_dir, f"{base_name}.npy")
-		csv_path = os.path.join(output_dir, f"{base_name}.csv")
-		metadata_path = os.path.join(output_dir, f"{base_name}.json")
-		figure_path = os.path.join(output_dir, f"{base_name}.png")
+		base_name = f"spectrum_{timestamp}"
+		spectrum_path = os.path.join(output_dir, f"{base_name}_spectrum.npy")
+		csv_path = os.path.join(output_dir, f"{base_name}_spectrum.csv")
+		metadata_path = os.path.join(output_dir, f"{base_name}_metadata.json")
+		figure_path = os.path.join(output_dir, f"{base_name}_spectrum.png")
 
-		frequencies_hz = np.asarray(self._last_scan_result["frequencies_hz"], dtype=np.float64)
-		power_levels_db = np.asarray(self._last_scan_result["power_levels_db"], dtype=np.float64)
-		config = dict(self._last_scan_result["config"])
+		frequencies_mhz = np.asarray(self._last_spectrum_result["frequencies_mhz"], dtype=np.float64)
+		pxx = np.asarray(self._last_spectrum_result["pxx"], dtype=np.float64)
+		config = dict(self._last_spectrum_result["config"])
 
-		scan_matrix = np.column_stack((frequencies_hz, power_levels_db)).astype(np.float64)
-		np.save(samples_path, scan_matrix)
+		spectrum_matrix = np.column_stack((frequencies_mhz, pxx)).astype(np.float64)
+		np.save(spectrum_path, spectrum_matrix)
 
 		with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
 			writer = csv.writer(csv_file)
-			writer.writerow(["frequency_hz", "power_db"])
-			for freq_hz, power_db in scan_matrix:
-				writer.writerow([float(freq_hz), float(power_db)])
-
-		center_freq_hz = float((frequencies_hz[0] + frequencies_hz[-1]) / 2.0)
-		gain_for_metadata = config["gain"]
-		if gain_for_metadata == "auto":
-			gain_for_metadata = -1.0
+			writer.writerow(["frequency_mhz", "power_dbm"])
+			for freq_mhz, power in spectrum_matrix:
+				writer.writerow([float(freq_mhz), float(power)])
 
 		metadata = {
-			"recording_kind": "frequency_scan",
-			"scan_start_freq_hz": float(frequencies_hz[0]),
-			"scan_end_freq_hz": float(frequencies_hz[-1]),
-			"scan_points": int(frequencies_hz.size),
+			"recording_kind": "welch_power_spectrum",
+			"center_freq_hz": float(config["center_freq_hz"]),
 			"sample_rate_hz": float(config["sample_rate_hz"]),
-			"center_freq_hz": center_freq_hz,
-			"gain_db": float(gain_for_metadata),
-			"num_samples": int(scan_matrix.shape[0]),
-			"saved_samples_file": samples_path,
+			"n_per_seg": int(config["n_per_seg"]),
+			"n_segs": int(config["n_segs"]),
+			"gain_db": float(config["gain"]),
+			"frequency_range_mhz": [float(frequencies_mhz.min()), float(frequencies_mhz.max())],
+			"power_range_dbm": [float(pxx.min()), float(pxx.max())],
+			"spectrum_file": spectrum_path,
 			"csv_path": csv_path,
 			"plot_png_path": figure_path,
 			"source": str(config["source"]),
@@ -335,34 +440,35 @@ class DataRecordingWindow:
 		self.figure.savefig(figure_path, dpi=130)
 
 		self.status_var.set(f"Status: saved to {output_dir}")
-		self.append_log_fn(f"Frequency scan saved: {os.path.basename(samples_path)}")
+		self.append_log_fn(f"Spectrum saved: {os.path.basename(spectrum_path)}")
 
 		if self.on_saved_callback is not None:
 			try:
 				self.on_saved_callback(
 					{
-						"samples_path": samples_path,
+						"spectrum_path": spectrum_path,
 						"metadata_path": metadata_path,
 						"csv_path": csv_path,
 						"plot_path": figure_path,
-						"scan_points": int(frequencies_hz.size),
+						"center_freq_hz": config["center_freq_hz"],
+						"sample_rate_hz": config["sample_rate_hz"],
 					}
 				)
 			except Exception:
 				pass
 
 		messagebox.showinfo(
-			"Data Recording",
-			"Saved scan outputs:\n"
-			f"- {os.path.basename(samples_path)}\n"
+			"Power Spectrum Analysis",
+			"Saved spectrum outputs:\n"
+			f"- {os.path.basename(spectrum_path)}\n"
 			f"- {os.path.basename(csv_path)}\n"
 			f"- {os.path.basename(metadata_path)}\n"
 			f"- {os.path.basename(figure_path)}",
 		)
 
 	def _close(self):
-		if self._scan_running:
-			messagebox.showwarning("Data Recording", "A scan is currently running. Please wait for it to finish.")
+		if self._acquisition_running:
+			messagebox.showwarning("Power Spectrum Analysis", "Acquisition in progress. Please wait.")
 			return
 
 		try:
