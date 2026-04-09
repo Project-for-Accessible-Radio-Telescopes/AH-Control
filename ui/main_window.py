@@ -177,8 +177,6 @@ class MainWindow:
             ("Lesson Wizard", self.lesson_wizard_action),
             ("Settings", self.settings_tool),
             ("Local Information", lambda: self.obtain_local_info()),
-            ("Create Sample Graph", lambda: plot_basic_graph(self.root, x=[1, 2, 3], y=[1, 4, 9], title="Sample Graph", xlabel="X", ylabel="Y")),
-            ("Create Sample Data", lambda: self.create_sample_data()),
         ]))
 
         self.record_btn = cbuttons.make_button(self.menu_bar, text="Record")
