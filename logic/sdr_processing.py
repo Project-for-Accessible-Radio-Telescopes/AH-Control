@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 
 import numpy as np
+from scipy import signal
 
 from logic.file_ext import validate_recording_integrity
 
@@ -17,6 +18,153 @@ def compute_rms_db(samples: np.ndarray, epsilon: float = 1e-12) -> float:
 
     rms = float(np.sqrt(np.mean(np.abs(values) ** 2)))
     return float(20.0 * np.log10(rms + float(epsilon)))
+
+
+def compute_power_spectrum_welch(samples: np.ndarray, sample_rate: float, centre_freq: float, 
+                                  n_per_seg: int, n_segs: int) -> tuple:
+    """
+    Compute power spectrum using Welch's method with FFT shift correction.
+    
+    The Welch method provides better frequency resolution by dividing samples
+    into overlapping segments, computing FFT of each, and averaging the results.
+    
+    Parameters:
+    -----------
+    samples : np.ndarray
+        Complex or real samples from SDR (or can process in chunks)
+    sample_rate : float
+        Sample rate in Hz
+    centre_freq : float
+        Center frequency of the SDR in Hz
+    n_per_seg : int
+        Number of samples per segment (FFT size)
+    n_segs : int
+        Number of segments to average over
+    
+    Returns:
+    --------
+    tuple
+        (frequencies_mhz, power_spectrum)
+        - frequencies_mhz : np.ndarray
+            Frequency axis in MHz, centered at centre_freq
+        - power_spectrum : np.ndarray
+            Power spectral density (PSD) in linear scale
+    
+    Notes:
+    ------
+    The frequency range is: [-(sample_rate)/2 + centre_freq, +(sample_rate)/2 + centre_freq]
+    """
+    if samples.size == 0:
+        raise ValueError("Cannot compute power spectrum from empty sample array")
+    
+    samples = np.asarray(samples)
+    if samples.ndim != 1:
+        samples = samples.reshape(-1)
+    
+    # Use scipy.signal.welch to compute power spectral density.
+    # For complex SDR samples, welch returns a two-sided spectrum in wrapped
+    # frequency order, so sort the bins explicitly by frequency.
+    frequencies, pxx_den = signal.welch(
+        samples, 
+        fs=sample_rate, 
+        window='hann',
+        nperseg=n_per_seg, 
+        noverlap=None,  # Default 50% overlap
+        average='mean',
+        return_onesided=False,
+    )
+    
+    sort_index = np.argsort(frequencies)
+    frequencies_mhz = (frequencies[sort_index] + centre_freq) / 1e6
+    pxx_den_shifted = pxx_den[sort_index]
+    
+    return frequencies_mhz, pxx_den_shifted
+
+
+def compute_power_spectrum_welch_from_sdr(sdr, sample_rate: float, centre_freq: float, 
+                                           n_per_seg: int, n_segs: int, bias_tee: bool = True) -> tuple:
+    """
+    Read samples directly from SDR and compute power spectrum using Welch's method.
+    
+    This is a live variant that reads multiple segments from the SDR device and averages
+    the resulting power spectra, providing better noise floor estimates.
+    
+    Parameters:
+    -----------
+    sdr : RtlSdr
+        RTL-SDR device object (already configured with sample_rate and center_freq)
+    sample_rate : float
+        Sample rate in Hz (should match sdr.sample_rate)
+    centre_freq : float
+        Center frequency in Hz (should match sdr.center_freq)
+    n_per_seg : int
+        Number of samples to read per segment
+    n_segs : int
+        Number of segments to acquire and average
+    bias_tee : bool
+        Whether to enable bias tee on the device
+    
+    Returns:
+    --------
+    tuple
+        (frequencies_mhz, power_spectrum_mean)
+        - frequencies_mhz : np.ndarray
+            Frequency axis in MHz
+        - power_spectrum_mean : np.ndarray
+            Averaged power spectral density (PSD)
+    
+    Raises:
+    -------
+    RuntimeError
+        If SDR read fails or device disconnects
+    """
+    try:
+        # Set bias tee if requested
+        sdr.set_bias_tee(bias_tee)
+        
+        # Clear buffer with initial reads
+        for _ in range(3):
+            sdr.read_samples(n_per_seg)
+        
+        # Initialize accumulator for averaging (size determined on first welch call)
+        pxx_den_sum = None
+        frequencies = None
+        
+        # Read and process multiple segments
+        for seg_idx in range(n_segs):
+            samples = sdr.read_samples(n_per_seg)
+            
+            # Compute Welch PSD for this segment
+            freq_seg, pxx_den = signal.welch(
+                samples, 
+                fs=sample_rate, 
+                window='hann',
+                nperseg=n_per_seg,
+                noverlap=None,
+                average='mean',
+                return_onesided=False,
+            )
+            
+            # Initialize accumulator on first iteration with the actual welch size.
+            if pxx_den_sum is None:
+                pxx_den_sum = np.zeros_like(pxx_den)
+                frequencies = freq_seg
+            
+            pxx_den_sum += pxx_den
+        
+        # Average the power spectra
+        pxx_den_mean = pxx_den_sum / n_segs
+        
+        sort_index = np.argsort(frequencies)
+        frequencies_mhz = (frequencies[sort_index] + centre_freq) / 1e6
+        pxx_den_mean = pxx_den_mean[sort_index]
+        
+        return frequencies_mhz, pxx_den_mean
+    
+    finally:
+        # Always disable bias tee when done
+        sdr.set_bias_tee(False)
+
 
 
 def _compute_psd_db(samples: np.ndarray, nfft: int = 4096) -> np.ndarray:

@@ -154,8 +154,15 @@ class HealthDiagnosticsWindow:
             gain_db = float(self.gain_var.get().strip())
             duration_s = float(self.duration_var.get().strip())
 
-            if center_freq_hz < 1_000 or center_freq_hz > 3_000_000_000:
+            if center_freq_hz < 1_000:
                 raise ValueError("Center frequency out of range")
+
+            max_center_freq_hz = float(self.settings.get("rtlsdr_max_center_freq_hz", 1_766_000_000.0))
+            if center_freq_hz > max_center_freq_hz:
+                raise ValueError(
+                    f"Center frequency must be <= {int(max_center_freq_hz)} Hz for RTL-SDR (about 1.7 GHz)"
+                )
+
             if sample_rate_hz < 1_000 or sample_rate_hz > 3_200_000:
                 raise ValueError("Sample rate out of range")
             max_duration = float(self.settings.get("quick_check_max_duration_s", 2.0))

@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-15
+### Major Update: Resolved issue #2
+- Improved Welch method power spectrum analysis with `scipy.signal.welch` and multi-segment averaging for improved frequency resolution.
+- Verified full RTL-SDR connection.
+- Verified data recording and processing.
+
+## [0.1.4] - 2026-04-08
+
+### Added
+- Implemented Welch method power spectrum analysis with `scipy.signal.welch` and multi-segment averaging for improved frequency resolution.
+- Added cross-platform WiFi network scanning (macOS, Linux, Windows) in `logic/wifi_scanner.py`.
+- Integrated intelligent RTL-SDR device detection with source-triggered device discovery in Data Recording UI.
+- Added Virtual WiFi source option for users without RTL-SDR hardware, with real network detection and synthetic fallback.
+
+### Changed
+- Refactored Data Recording UI from "Frequency Scan Recording" to "Power Spectrum Analysis (Welch Method)" with simplified parameters.
+- Enhanced plot visualization with dBm scale for improved peak visibility and realistic signal strength representation.
+- Improved peak rendering with wider Gaussian envelopes (1-2% of FFT size) matching realistic WiFi channel bandwidth.
+- Updated spectrum export formats to include power in dBm with comprehensive metadata.
+
+### Fixed
+- Fixed frequency validation to scope RTL-SDR hardware limits (≤1.766 GHz) separately from Virtual WiFi (2.4 GHz and 5 GHz bands).
+- Enhanced WiFi peak visibility by 5x amplitude boost and proper RSSI-to-linear-to-dBm conversion.
+
 ## [0.1.3] - 2026-03-26
 
 ### Added

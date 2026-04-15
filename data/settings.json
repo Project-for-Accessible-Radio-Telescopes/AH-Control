@@ -1,8 +1,8 @@
 {
-  "version": "0.1.3",
+  "version": "0.2.0",
   "language": "en",
-  "theme": "dark",
-  "font_size": 10,
+  "theme": "light",
+  "font_size": 20,
   "capture_default_sample_rate_hz": 2048000.0,
   "capture_default_center_freq_hz": 100000000.0,
   "capture_default_gain_db": 20.0,
