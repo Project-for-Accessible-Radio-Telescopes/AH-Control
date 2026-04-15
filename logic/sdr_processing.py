@@ -4,7 +4,6 @@ from datetime import datetime
 
 import numpy as np
 from scipy import signal
-from scipy.fft import fftshift
 
 from logic.file_ext import validate_recording_integrity
 
@@ -62,30 +61,28 @@ def compute_power_spectrum_welch(samples: np.ndarray, sample_rate: float, centre
     if samples.ndim != 1:
         samples = samples.reshape(-1)
     
-    # Use scipy.signal.welch to compute power spectral density
-    # welch handles FFT, windowing (default: Hann), and averaging
+    # Use scipy.signal.welch to compute power spectral density.
+    # For complex SDR samples, welch returns a two-sided spectrum in wrapped
+    # frequency order, so sort the bins explicitly by frequency.
     frequencies, pxx_den = signal.welch(
         samples, 
         fs=sample_rate, 
         window='hann',
         nperseg=n_per_seg, 
         noverlap=None,  # Default 50% overlap
-        average='mean'
+        average='mean',
+        return_onesided=False,
     )
     
-    # Rescale frequency axis to MHz and shift to center at centre_freq
-    frequencies_mhz = (frequencies + centre_freq) / 1e6
-    
-    # Shift the frequency axis and power spectrum so centre frequency is in middle
-    # fftshift reorders the FFT output from [0, Fs] to [-Fs/2, Fs/2]
-    frequencies_mhz = fftshift(frequencies_mhz)
-    pxx_den_shifted = fftshift(pxx_den)
+    sort_index = np.argsort(frequencies)
+    frequencies_mhz = (frequencies[sort_index] + centre_freq) / 1e6
+    pxx_den_shifted = pxx_den[sort_index]
     
     return frequencies_mhz, pxx_den_shifted
 
 
 def compute_power_spectrum_welch_from_sdr(sdr, sample_rate: float, centre_freq: float, 
-                                           n_per_seg: int, n_segs: int, bias_tee: bool = False) -> tuple:
+                                           n_per_seg: int, n_segs: int, bias_tee: bool = True) -> tuple:
     """
     Read samples directly from SDR and compute power spectrum using Welch's method.
     
@@ -129,34 +126,38 @@ def compute_power_spectrum_welch_from_sdr(sdr, sample_rate: float, centre_freq: 
         for _ in range(3):
             sdr.read_samples(n_per_seg)
         
-        # Initialize accumulator for averaging
-        pxx_den_sum = np.zeros(n_per_seg // 2 + 1)  # Welch output size
+        # Initialize accumulator for averaging (size determined on first welch call)
+        pxx_den_sum = None
+        frequencies = None
         
         # Read and process multiple segments
         for seg_idx in range(n_segs):
             samples = sdr.read_samples(n_per_seg)
             
             # Compute Welch PSD for this segment
-            frequencies, pxx_den = signal.welch(
+            freq_seg, pxx_den = signal.welch(
                 samples, 
                 fs=sample_rate, 
                 window='hann',
                 nperseg=n_per_seg,
                 noverlap=None,
-                average='mean'
+                average='mean',
+                return_onesided=False,
             )
+            
+            # Initialize accumulator on first iteration with the actual welch size.
+            if pxx_den_sum is None:
+                pxx_den_sum = np.zeros_like(pxx_den)
+                frequencies = freq_seg
             
             pxx_den_sum += pxx_den
         
         # Average the power spectra
         pxx_den_mean = pxx_den_sum / n_segs
         
-        # Rescale frequency axis to MHz
-        frequencies_mhz = (frequencies + centre_freq) / 1e6
-        
-        # Shift both axes so center frequency is in the middle
-        frequencies_mhz = fftshift(frequencies_mhz)
-        pxx_den_mean = fftshift(pxx_den_mean)
+        sort_index = np.argsort(frequencies)
+        frequencies_mhz = (frequencies[sort_index] + centre_freq) / 1e6
+        pxx_den_mean = pxx_den_mean[sort_index]
         
         return frequencies_mhz, pxx_den_mean
     
