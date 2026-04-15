@@ -9,6 +9,12 @@ import json
 
 from ui.main_window import MainWindow
 
+
+def _app_base_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 def _safe_log(window, text):
     if window is not None and hasattr(window, "_append_log"):
         try:
@@ -34,6 +40,11 @@ def run_app():
     main_window = None
 
     try:
+        # we normalise the working directory
+        # so that relative paths work correctly.
+        # this is optional for dev runs but necessary for releases.
+        os.chdir(_app_base_dir())
+
         root = tk.Tk()
         main_window = MainWindow(root)
 
