@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 
 
 DEFAULT_SETTINGS = {
@@ -21,6 +22,26 @@ DEFAULT_SETTINGS = {
     "network_timeout_s": 6,
     "local_info_use_ip_fallback": True,
 }
+
+
+def _default_settings_path():
+    if getattr(sys, "frozen", False):
+        app_support = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "PARTApp")
+        return os.path.join(app_support, "settings.json")
+    return os.path.join("data", "settings.json")
+
+
+def _resolve_settings_path(settings_path=None):
+    if settings_path is None:
+        return _default_settings_path()
+
+    if os.path.isabs(settings_path):
+        return settings_path
+
+    if getattr(sys, "frozen", False) and settings_path.replace("\\", "/") == "data/settings.json":
+        return _default_settings_path()
+
+    return settings_path
 
 
 def _coerce_bool(value, default):
@@ -150,6 +171,7 @@ def merge_settings(raw_settings):
 
 
 def load_settings_file(settings_path="data/settings.json"):
+    settings_path = _resolve_settings_path(settings_path)
     raw = {}
     if os.path.exists(settings_path):
         try:
@@ -164,6 +186,7 @@ def load_settings_file(settings_path="data/settings.json"):
 
 
 def save_settings_file(settings, settings_path="data/settings.json"):
+    settings_path = _resolve_settings_path(settings_path)
     merged = merge_settings(settings)
     os.makedirs(os.path.dirname(settings_path) or ".", exist_ok=True)
     with open(settings_path, "w", encoding="utf-8") as f:

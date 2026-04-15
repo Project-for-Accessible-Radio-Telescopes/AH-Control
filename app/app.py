@@ -5,9 +5,9 @@ import platform
 import re
 import sys
 from datetime import datetime
-import json
 
 from ui.main_window import MainWindow
+from logic.settings_manager import load_settings_file
 
 
 def _app_base_dir():
@@ -27,10 +27,8 @@ def _safe_log(window, text):
 
 def _extract_app_version(root):
     try:
-        with open("data/settings.json", "r", encoding="utf-8") as settings_file:
-            settings = json.load(settings_file)
-            version = settings.get("version", "unknown")
-            return version
+        settings = load_settings_file("data/settings.json")
+        return str(settings.get("version", "unknown"))
     except Exception:
         return "unknown"
 
@@ -48,6 +46,13 @@ def run_app():
         root = tk.Tk()
         main_window = MainWindow(root)
 
+        icon_path = os.path.join("assets", "visual", "icon.png")
+        try:
+            icon = tk.PhotoImage(file=icon_path)
+            root.iconphoto(False, icon)
+        except Exception:
+            _safe_log(main_window, f"Non-critical warning: Icon failed to load")
+
         login_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         app_version = _extract_app_version(root)
 
@@ -62,8 +67,10 @@ def run_app():
 
         root.mainloop()
     except Exception as error:
-        _safe_log(main_window, f"Application error: {error}")
-        print(f"Application error: {error}", file=sys.stderr)
+        try:
+            _safe_log(main_window, f"Application error: {error}")
+        except:
+            print(f"Application error: {error}", file=sys.stderr)
         if root is not None:
             try:
                 root.destroy()

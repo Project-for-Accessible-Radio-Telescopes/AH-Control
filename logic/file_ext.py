@@ -22,7 +22,6 @@ def find_recording_metadata_path(samples_path):
 
 
 def validate_recording_integrity(samples_path, metadata_path=None):
-    """Validate recording sample + metadata pair without mutating files."""
     warnings = []
     errors = []
     resolved_metadata_path = metadata_path or find_recording_metadata_path(samples_path)
