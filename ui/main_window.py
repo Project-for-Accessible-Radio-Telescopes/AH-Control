@@ -15,6 +15,7 @@ from ui.health_diagnostics_window import HealthDiagnosticsWindow
 from ui.data_recording_window import DataRecordingWindow
 from ui.lesson_wizard_window import LessonWizardWindow
 from ui.comparison_window import ComparisonWindow
+from ui.recording_browser_window import RecordingBrowserWindow
 import webbrowser
 from logic.file_ext import build_session_payload, write_ahf_file, read_ahf_file
 
@@ -143,15 +144,54 @@ class MainWindow:
             menu_bg = "#eeeeee"
             menu_fg = "#cccccc"
 
+        self._menu_scroll_offset = 0
+        self._menu_theme = theme
+        self._menu_bg = menu_bg
+
         # Full-width menu bar background
-        self.menu_bar = tk.Frame(self.root, bg=menu_bg, height=24)
-        self.menu_bar.pack(fill="x")
+        self.menu_bar = tk.Frame(self.root, bg=menu_bg, height=28)
+        self.menu_bar.pack(fill="x", side="top")
+        self.menu_bar.pack_propagate(False)
 
         # Divider under the menu bar to create a crisp bottom border
         self._menu_divider = tk.Frame(self.root, height=1, bg=menu_fg)
         self._menu_divider.pack(fill="x")
-        # Create menu buttons using centralized helper in `tools.cbuttons`
-        self.file_btn = cbuttons.make_button(self.menu_bar, text="File")
+
+        # Canvas for scrollable menu buttons
+        self.menu_canvas = tk.Canvas(
+            self.menu_bar,
+            bg=menu_bg,
+            highlightthickness=0,
+            bd=0,
+            height=28,
+        )
+        self.menu_canvas.pack(side="left", fill="both", expand=True, padx=(0, 2))
+
+        # Frame to hold the actual menu buttons inside the canvas
+        self.menu_btns_frame = tk.Frame(self.menu_canvas, bg=menu_bg)
+        self.menu_window = self.menu_canvas.create_window(
+            (0, 0),
+            window=self.menu_btns_frame,
+            anchor="nw",
+        )
+
+        # Left scroll arrow button
+        self.menu_left_btn = cbuttons.make_button(self.menu_bar, text="<")
+        self.menu_left_btn.configure(width=1, command=self._scroll_menu_left)
+        self.menu_left_btn.pack(side="left", padx=(2, 0))
+
+        # Right scroll arrow button
+        self.menu_right_btn = cbuttons.make_button(self.menu_bar, text=">")
+        self.menu_right_btn.configure(width=1, command=self._scroll_menu_right)
+        self.menu_right_btn.pack(side="right", padx=2)
+
+        # Bind events for layout and resize
+        self.menu_btns_frame.bind("<Configure>", self._on_menu_buttons_configure)
+        self.menu_canvas.bind("<Configure>", self._on_menu_canvas_configure)
+        self.root.bind("<Configure>", self._update_menu_bar_overflow, add="+")
+
+        # Create menu buttons and pack into the scrollable frame
+        self.file_btn = cbuttons.make_button(self.menu_btns_frame, text="File")
         self.file_btn.pack(side="left", padx=4)
         self.file_btn.configure(command=lambda: self.menu.show_menu(self.file_btn, [
             ("New Project", self.new_project),
@@ -162,24 +202,23 @@ class MainWindow:
             ("Exit", self.root.quit),
         ]))
 
-        self.help_btn = cbuttons.make_button(self.menu_bar, text="Help")
+        self.help_btn = cbuttons.make_button(self.menu_btns_frame, text="Help")
         self.help_btn.pack(side="left")
         self.help_btn.configure(command=lambda: self.menu.show_menu(self.help_btn, [
             ("About", self.on_about),
             ("Documentation", lambda: webbrowser.open("https://parttelescopes.web.app/documentation.html")),
         ]))
 
-        self.tools_btn = cbuttons.make_button(self.menu_bar, text="Tools")
+        self.tools_btn = cbuttons.make_button(self.menu_btns_frame, text="Tools")
         self.tools_btn.pack(side="left", padx=4)
         self.tools_btn.configure(command=lambda: self.menu.show_menu(self.tools_btn, [
             ("Calibration", self.calibration_tool),
             ("Health Diagnostics", self.health_diagnostics_action),
-            ("Lesson Wizard", self.lesson_wizard_action),
             ("Settings", self.settings_tool),
             ("Local Information", lambda: self.obtain_local_info()),
         ]))
 
-        self.record_btn = cbuttons.make_button(self.menu_bar, text="Record")
+        self.record_btn = cbuttons.make_button(self.menu_btns_frame, text="Record")
         self.record_btn.pack(side="left")
         self.record_btn.configure(command=lambda: self.menu.show_menu(self.record_btn, [
             ("Begin Data Recording", self.start_recording_menu),
@@ -187,7 +226,72 @@ class MainWindow:
             ("Advanced Signal View", self.advanced_signal_view_action),
             ("Compare Recordings", self.compare_recordings_action),
             ("Info", lambda: msgPopup("Recording Tools", "Use the 'Begin Data Recording' option to capture IQ data from a connected RTL-SDR device. Use RFI Mapping for quick power sweeps and Advanced/Compare views for inspection.")),
+            ("Recording Browser", self.recording_browser_action),
         ]))
+
+        self.learning_btn = cbuttons.make_button(self.menu_btns_frame, text="Learning")
+        self.learning_btn.pack(side="left", padx=4)
+        self.learning_btn.configure(command=lambda: self.menu.show_menu(self.learning_btn, [
+            ("Lesson Wizard", self.lesson_wizard_action),
+            ("Resource Library", self.resource_library_action),
+            ("Education Mode", self.education_mode_action),
+        ]))
+
+    def _on_menu_buttons_configure(self, event=None):
+        """Called when menu buttons frame is resized."""
+        self.menu_canvas.configure(scrollregion=self.menu_canvas.bbox("all"))
+        self._update_menu_bar_overflow()
+
+    def _on_menu_canvas_configure(self, event=None):
+        """Called when canvas is resized."""
+        self._update_menu_bar_overflow()
+
+    def _update_menu_bar_overflow(self, event=None):
+        """Detect overflow and show/hide arrow buttons accordingly."""
+        try:
+            canvas_width = self.menu_canvas.winfo_width()
+            frame_width = self.menu_btns_frame.winfo_reqwidth()
+
+            if canvas_width < 1 or frame_width < 1:
+                return
+
+            has_overflow = frame_width > canvas_width
+
+            if has_overflow:
+                self.menu_left_btn.pack(side="left", padx=(2, 0))
+                self.menu_right_btn.pack(side="right", padx=2)
+                self._update_arrow_states()
+            else:
+                self.menu_left_btn.pack_forget()
+                self.menu_right_btn.pack_forget()
+                self._menu_scroll_offset = 0
+                self.menu_canvas.coords(self.menu_window, (0, 0))
+        except Exception:
+            pass
+
+    def _update_arrow_states(self):
+        """Enable/disable arrow buttons based on scroll position."""
+        frame_width = self.menu_btns_frame.winfo_reqwidth()
+        canvas_width = self.menu_canvas.winfo_width()
+        max_offset = max(0, frame_width - canvas_width)
+
+        self.menu_left_btn.state(["!disabled"] if self._menu_scroll_offset > 0 else ["disabled"])
+        self.menu_right_btn.state(["!disabled"] if self._menu_scroll_offset < max_offset else ["disabled"])
+
+    def _scroll_menu_left(self):
+        """Scroll menu buttons to the left."""
+        self._menu_scroll_offset = max(0, self._menu_scroll_offset - 60)
+        self.menu_canvas.coords(self.menu_window, (-self._menu_scroll_offset, 0))
+        self._update_arrow_states()
+
+    def _scroll_menu_right(self):
+        """Scroll menu buttons to the right."""
+        frame_width = self.menu_btns_frame.winfo_reqwidth()
+        canvas_width = self.menu_canvas.winfo_width()
+        max_offset = max(0, frame_width - canvas_width)
+        self._menu_scroll_offset = min(max_offset, self._menu_scroll_offset + 60)
+        self.menu_canvas.coords(self.menu_window, (-self._menu_scroll_offset, 0))
+        self._update_arrow_states()
 
     def _normalize_recording_path(self, path):
         if not isinstance(path, str) or not path.strip():
@@ -446,8 +550,12 @@ class MainWindow:
             self.menu_bar.configure(bg=menu_bg)
         if hasattr(self, "_menu_divider"):
             self._menu_divider.configure(bg=menu_fg)
+        if hasattr(self, "menu_canvas"):
+            self.menu_canvas.configure(bg=menu_bg)
+        if hasattr(self, "menu_btns_frame"):
+            self.menu_btns_frame.configure(bg=menu_bg)
 
-        for button_name in ["file_btn", "help_btn", "tools_btn", "record_btn"]:
+        for button_name in ["file_btn", "help_btn", "tools_btn", "record_btn", "learning_btn", "menu_left_btn", "menu_right_btn"]:
             btn = getattr(self, button_name, None)
             if btn is not None:
                 btn.configure(style="TopMenu.TButton")
@@ -1124,6 +1232,62 @@ class MainWindow:
 
         self._run_in_background(analyze_recording, on_success=on_success, on_error=on_error)
     
+    def recording_browser_action(self):
+        """Open the recording browser window."""
+        try:
+            RecordingBrowserWindow(
+                self.root,
+                recordings_dir="data/recordings",
+                analyze_fn=self._analyze_recording_from_browser,
+                append_log_fn=self._append_log,
+                settings=self.settings,
+            )
+        except Exception as error:
+            messagebox.showerror("Recording Browser", f"Could not open recording browser:\n{error}")
+            self._append_log(f"Recording browser failed: {error}")
+
+    def _analyze_recording_from_browser(self, samples_path, metadata_path=None):
+        """Analyze a recording selected from the browser in advanced view."""
+        def analyze_recording():
+            return analyze_recording_for_advanced_view(
+                samples_path=samples_path,
+                nfft=int(self.settings.get("analysis_nfft", 4096)),
+                max_segments=int(self.settings.get("analysis_max_segments", 350)),
+                max_preview_samples=int(self.settings.get("analysis_max_preview_samples", 8_000_000)),
+            )
+
+        def on_success(result):
+            self._append_log("Advanced analysis complete")
+            try:
+                # Extract data from result structure
+                analysis = result.get("analysis", {})
+                sample_rate_hz = result.get("sample_rate_hz", 2_048_000)
+                center_freq_hz = result.get("center_freq_hz", 100_000_000)
+                
+                AdvancedSignalWindow(
+                    self.root,
+                    source_file=os.path.basename(samples_path),
+                    analysis=analysis,
+                    sample_rate_hz=sample_rate_hz,
+                    center_freq_hz=center_freq_hz,
+                    settings=self.settings,
+                )
+            except Exception as error:
+                messagebox.showerror("Advanced Signal View", f"Could not display results:\n{error}")
+                self._append_log("Advanced signal view failed")
+
+        def on_error(error):
+            messagebox.showerror("Advanced Signal View", f"Could not analyze recording:\n{error}")
+            self._append_log("Advanced signal view failed")
+
+        self._run_in_background(analyze_recording, on_success=on_success, on_error=on_error)
+
+    def resource_library_action(self):
+        pass
+
+    def education_mode_action(self):
+        pass
+
     def _read_settings(self):
         self.settings = load_settings_file("data/settings.json")
         return dict(self.settings)

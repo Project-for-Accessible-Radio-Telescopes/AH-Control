@@ -2,6 +2,7 @@ import json
 import os
 import sys
 
+from logic.util.coercion import coerce_bool, coerce_int, coerce_float, resolve_settings_path
 
 DEFAULT_SETTINGS = {
     "version": "0.1.0",
@@ -24,60 +25,12 @@ DEFAULT_SETTINGS = {
 }
 
 
-def _default_settings_path():
-    if getattr(sys, "frozen", False):
-        app_support = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "PARTApp")
-        return os.path.join(app_support, "settings.json")
-    return os.path.join("data", "settings.json")
-
-
-def _resolve_settings_path(settings_path=None):
-    if settings_path is None:
-        return _default_settings_path()
-
-    if os.path.isabs(settings_path):
-        return settings_path
-
-    if getattr(sys, "frozen", False) and settings_path.replace("\\", "/") == "data/settings.json":
-        return _default_settings_path()
-
-    return settings_path
-
-
-def _coerce_bool(value, default):
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        text = value.strip().lower()
-        if text in {"1", "true", "yes", "on"}:
-            return True
-        if text in {"0", "false", "no", "off"}:
-            return False
-    return default
-
-
-def _coerce_int(value, default, min_value=None, max_value=None):
-    try:
-        parsed = int(value)
-    except Exception:
-        return default
-    if min_value is not None and parsed < min_value:
-        return default
-    if max_value is not None and parsed > max_value:
-        return default
-    return parsed
-
-
-def _coerce_float(value, default, min_value=None, max_value=None):
-    try:
-        parsed = float(value)
-    except Exception:
-        return default
-    if min_value is not None and parsed < min_value:
-        return default
-    if max_value is not None and parsed > max_value:
-        return default
-    return parsed
+# Type coercion functions imported from util.coercion
+# Backward compatibility aliases
+_coerce_bool = coerce_bool
+_coerce_int = coerce_int
+_coerce_float = coerce_float
+_resolve_settings_path = resolve_settings_path
 
 
 def merge_settings(raw_settings):
@@ -89,15 +42,15 @@ def merge_settings(raw_settings):
     if merged["theme"] not in {"light", "dark"}:
         merged["theme"] = DEFAULT_SETTINGS["theme"]
 
-    merged["font_size"] = _coerce_int(merged.get("font_size"), DEFAULT_SETTINGS["font_size"], 8, 20)
+    merged["font_size"] = coerce_int(merged.get("font_size"), DEFAULT_SETTINGS["font_size"], 8, 20)
 
-    merged["capture_default_sample_rate_hz"] = _coerce_float(
+    merged["capture_default_sample_rate_hz"] = coerce_float(
         merged.get("capture_default_sample_rate_hz"),
         DEFAULT_SETTINGS["capture_default_sample_rate_hz"],
         1_000,
         3_200_000,
     )
-    merged["capture_default_center_freq_hz"] = _coerce_float(
+    merged["capture_default_center_freq_hz"] = coerce_float(
         merged.get("capture_default_center_freq_hz"),
         DEFAULT_SETTINGS["capture_default_center_freq_hz"],
         1_000,

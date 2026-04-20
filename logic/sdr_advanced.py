@@ -3,7 +3,8 @@ import os
 
 import numpy as np
 
-from logic.file_ext import find_recording_metadata_path, validate_recording_integrity
+from logic.util.file_helpers import find_recording_metadata_path
+from logic.util.validation import validate_recording_integrity
 
 
 DEFAULT_SAMPLE_RATE_HZ = 2_048_000.0

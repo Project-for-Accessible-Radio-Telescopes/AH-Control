@@ -5,7 +5,8 @@ from datetime import datetime
 import numpy as np
 from scipy import signal
 
-from logic.file_ext import validate_recording_integrity
+from logic.util.file_helpers import find_recording_metadata_path
+from logic.util.validation import validate_recording_integrity
 
 
 def compute_rms_db(samples: np.ndarray, epsilon: float = 1e-12) -> float:
@@ -313,10 +314,9 @@ def process_all_recordings(recordings_dir: str = "data/recordings", output_subdi
             continue
 
         samples_path = os.path.join(recordings_dir, filename)
-        base_name = os.path.splitext(filename)[0]
-        metadata_path = os.path.join(recordings_dir, f"{base_name}.json")
+        metadata_path = find_recording_metadata_path(samples_path)
 
-        if not os.path.exists(metadata_path):
+        if not metadata_path or not os.path.exists(metadata_path):
             skipped.append(f"Missing metadata for {filename}")
             continue
 
