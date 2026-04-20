@@ -1,18 +1,8 @@
-"""Signal processing and spectrum analysis utilities."""
 import numpy as np
 from scipy import signal
 
 
 def compute_rms_db(samples: np.ndarray, epsilon: float = 1e-12) -> float:
-    """Compute RMS amplitude in dBFS-like scale for complex or real samples.
-    
-    Args:
-        samples: Array of complex or real samples
-        epsilon: Small value to prevent log(0)
-        
-    Returns:
-        RMS power in dB
-    """
     values = np.asarray(samples)
     if values.ndim != 1:
         values = values.reshape(-1)
@@ -25,26 +15,6 @@ def compute_rms_db(samples: np.ndarray, epsilon: float = 1e-12) -> float:
 
 def compute_power_spectrum_welch(samples: np.ndarray, sample_rate: float, centre_freq: float, 
                                   n_per_seg: int, n_segs: int) -> tuple:
-    """Compute power spectrum using Welch's method with FFT shift correction.
-    
-    The Welch method provides better frequency resolution by dividing samples
-    into overlapping segments, computing FFT of each, and averaging the results.
-    
-    Args:
-        samples: Complex or real samples from SDR
-        sample_rate: Sample rate in Hz
-        centre_freq: Center frequency of the SDR in Hz
-        n_per_seg: Number of samples per segment (FFT size)
-        n_segs: Number of segments to average over (not used directly by scipy)
-        
-    Returns:
-        Tuple of (frequencies_mhz, power_spectrum)
-            - frequencies_mhz: Frequency axis in MHz, centered at centre_freq
-            - power_spectrum: Power spectral density (PSD) in linear scale
-            
-    Notes:
-        The frequency range is: [-(sample_rate)/2 + centre_freq, +(sample_rate)/2 + centre_freq]
-    """
     if samples.size == 0:
         raise ValueError("Cannot compute power spectrum from empty sample array")
     
@@ -74,22 +44,6 @@ def compute_power_spectrum_welch(samples: np.ndarray, sample_rate: float, centre
 
 def compute_power_spectrum_welch_from_sdr(sdr, sample_rate: float, centre_freq: float, 
                                            n_per_seg: int, n_segs: int, bias_tee: bool = True) -> tuple:
-    """Read samples directly from SDR and compute power spectrum using Welch's method.
-    
-    This is a live variant that reads multiple segments from the SDR device and averages
-    the resulting power spectra, providing better noise floor estimates.
-    
-    Args:
-        sdr: RTL-SDR device object (already configured with sample_rate and center_freq)
-        sample_rate: Sample rate in Hz (should match sdr.sample_rate)
-        centre_freq: Center frequency in Hz (should match sdr.center_freq)
-        n_per_seg: Samples per segment (FFT size)
-        n_segs: Number of segments to read and average
-        bias_tee: Whether to enable bias tee (default: True)
-        
-    Returns:
-        Tuple of (frequencies_mhz, power_spectrum)
-    """
     if bias_tee:
         sdr.set_bias_tee(True)
     
@@ -113,15 +67,7 @@ def compute_power_spectrum_welch_from_sdr(sdr, sample_rate: float, centre_freq: 
 
 
 def compute_psd_db(samples: np.ndarray, nfft: int = 4096) -> np.ndarray:
-    """Compute power spectral density in dB from samples.
     
-    Args:
-        samples: Array of samples
-        nfft: FFT size
-        
-    Returns:
-        PSD in dB scale
-    """
     if samples.size == 0:
         raise ValueError("Cannot compute PSD from empty sample array")
     
@@ -132,17 +78,6 @@ def compute_psd_db(samples: np.ndarray, nfft: int = 4096) -> np.ndarray:
 
 
 def extract_peak_features(psd_db: np.ndarray, sample_rate_hz: float, center_freq_hz: float, top_n: int = 5):
-    """Extract top N peak frequency features from a PSD.
-    
-    Args:
-        psd_db: Power spectral density in dB
-        sample_rate_hz: Sample rate in Hz
-        center_freq_hz: Center frequency in Hz
-        top_n: Number of top peaks to return
-        
-    Returns:
-        List of dicts with keys: frequency_mhz, power_db
-    """
     if psd_db.size == 0:
         return []
     
@@ -171,16 +106,6 @@ def extract_peak_features(psd_db: np.ndarray, sample_rate_hz: float, center_freq
 
 
 def build_frequency_axis_mhz(nfft, sample_rate_hz, center_freq_hz):
-    """Build a frequency axis in MHz for spectral analysis.
-    
-    Args:
-        nfft: FFT size
-        sample_rate_hz: Sample rate in Hz
-        center_freq_hz: Center frequency in Hz
-        
-    Returns:
-        np.ndarray of frequencies in MHz
-    """
     freq_hz = np.fft.fftshift(
         np.fft.fftfreq(nfft, 1.0 / sample_rate_hz)
     )

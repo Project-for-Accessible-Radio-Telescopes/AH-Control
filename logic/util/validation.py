@@ -6,22 +6,6 @@ import numpy as np
 
 
 def validate_recording_integrity(samples_path, metadata_path=None, find_metadata_func=None):
-    """Validate the integrity of a recording (samples and metadata files).
-    
-    Args:
-        samples_path: Path to .npy samples file
-        metadata_path: Path to metadata JSON file (auto-detected if None)
-        find_metadata_func: Function to locate metadata (uses file_helpers.find_recording_metadata_path by default)
-        
-    Returns:
-        Dict with keys:
-            - ok: bool indicating if recording is valid
-            - warnings: list of warning messages
-            - errors: list of error messages
-            - metadata_path: resolved metadata path
-            - sample_count: number of samples
-            - metadata: parsed metadata dict
-    """
     if find_metadata_func is None:
         from logic.util.file_helpers import find_recording_metadata_path
         find_metadata_func = find_recording_metadata_path

@@ -19,34 +19,19 @@ AHF_EXTENSION = ".ahf"
 AHF_SCHEMA_VERSION = 2
 
 
-# Backward compatibility aliases for file_ext functions now in util
-# validate_recording_integrity imported above
-# find_recording_metadata_path imported above
-
-
-
-
-# Backward compatibility: all functions are now in util modules
-# These wrappers delegate to the util modules for cleaner code organization
-
-
 def _clean_string_list(values):
-    """Backward compatibility wrapper for clean_string_list from util.file_helpers."""
     return clean_string_list(values)
 
 
 def _paths_to_relative(paths, project_dir):
-    """Backward compatibility wrapper for paths_to_relative from util.file_helpers."""
     return paths_to_relative(paths, project_dir)
 
 
 def _paths_to_absolute(paths, project_dir):
-    """Backward compatibility wrapper for paths_to_absolute from util.file_helpers."""
     return paths_to_absolute(paths, project_dir)
 
 
 def _clean_annotations_payload(recording_annotations):
-    """Backward compatibility wrapper for clean_annotations_payload from util.data_cleaning."""
     return clean_annotations_payload(recording_annotations)
 
 

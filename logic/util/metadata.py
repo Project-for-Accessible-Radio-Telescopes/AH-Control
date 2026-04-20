@@ -1,4 +1,3 @@
-"""Metadata building and recording management utilities."""
 import json
 import os
 from datetime import datetime
@@ -17,22 +16,7 @@ def build_recording_metadata(
     samples_path,
     created_at,
 ):
-    """Build a metadata dictionary for a recording.
     
-    Args:
-        device_index: RTL-SDR device index
-        serial: Device serial number
-        center_freq_hz: Center frequency in Hz
-        sample_rate_hz: Sample rate in Hz
-        gain_db: Gain in dB
-        duration_s: Recording duration in seconds
-        num_samples: Total number of samples
-        samples_path: Path to saved samples file
-        created_at: Creation timestamp string
-        
-    Returns:
-        Dict with recording metadata
-    """
     return {
         "device_index": int(device_index),
         "serial": serial,
@@ -59,29 +43,6 @@ def save_samples_and_metadata(
     duration_s,
     num_samples,
 ):
-    """Save samples array and metadata to files.
-    
-    Creates timestamped .npy and .json files in output_dir with filenames:
-    {tag}_{timestamp}_dev{device_index}.[npy|json]
-    
-    Args:
-        samples: np.ndarray of samples to save
-        output_dir: Directory to save files in (created if missing)
-        tag: Filename prefix tag
-        device_index: RTL-SDR device index
-        serial: Device serial number
-        center_freq_hz: Center frequency in Hz
-        sample_rate_hz: Sample rate in Hz
-        gain_db: Gain in dB
-        duration_s: Recording duration in seconds
-        num_samples: Total number of samples
-        
-    Returns:
-        Dict with keys:
-            - samples_path: path to .npy file
-            - metadata_path: path to .json file
-            - num_samples: sample count
-    """
     os.makedirs(output_dir, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

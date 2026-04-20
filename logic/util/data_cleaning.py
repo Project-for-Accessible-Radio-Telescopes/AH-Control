@@ -1,20 +1,7 @@
-"""Data cleaning and normalization utilities."""
 from logic.util.file_helpers import clean_string_list
 
 
 def clean_annotations_payload(recording_annotations):
-    """Clean and validate recording annotations payload.
-    
-    Ensures all annotations have valid structure and required fields.
-    
-    Args:
-        recording_annotations: List of annotation dicts to validate
-        
-    Returns:
-        Cleaned list of validated annotation dicts with keys:
-            - samples_path: path to samples file
-            - annotations: list of annotation dicts
-    """
     cleaned = []
     for entry in recording_annotations or []:
         if not isinstance(entry, dict):

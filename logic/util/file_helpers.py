@@ -1,16 +1,8 @@
-"""File and path operation utilities."""
+import json
 import os
 
 
 def find_recording_metadata_path(samples_path):
-    """Find the metadata JSON file associated with a samples file.
-    
-    Args:
-        samples_path: Path to .npy samples file
-        
-    Returns:
-        Path to metadata file if found, None otherwise
-    """
     stem = os.path.splitext(samples_path)[0]
     candidates = [
         stem + ".json",
@@ -31,18 +23,6 @@ def find_recording_metadata_path(samples_path):
 
 
 def normalize_project_path(path, ahf_extension=".ahf"):
-    """Normalize a path to ensure it has the correct AHF extension.
-    
-    Args:
-        path: Project file path
-        ahf_extension: Expected extension (default: ".ahf")
-        
-    Returns:
-        Path with correct extension
-        
-    Raises:
-        ValueError: If path is empty
-    """
     if not path:
         raise ValueError("Project path cannot be empty")
 
@@ -53,14 +33,6 @@ def normalize_project_path(path, ahf_extension=".ahf"):
 
 
 def clean_string_list(values):
-    """Clean and deduplicate a list of strings.
-    
-    Args:
-        values: List of values (may contain non-strings)
-        
-    Returns:
-        Cleaned list of unique non-empty strings
-    """
     cleaned = []
     seen = set()
     for value in values or []:
@@ -77,15 +49,6 @@ def clean_string_list(values):
 
 
 def paths_to_relative(paths, project_dir):
-    """Convert absolute paths to relative paths within a project directory.
-    
-    Args:
-        paths: List of file paths
-        project_dir: Project root directory
-        
-    Returns:
-        List of relative paths
-    """
     relative_paths = []
     for raw_path in clean_string_list(paths):
         normalized = os.path.normpath(raw_path)
@@ -99,15 +62,6 @@ def paths_to_relative(paths, project_dir):
 
 
 def paths_to_absolute(paths, project_dir):
-    """Convert relative paths to absolute paths within a project directory.
-    
-    Args:
-        paths: List of file paths
-        project_dir: Project root directory
-        
-    Returns:
-        List of absolute paths
-    """
     absolute_paths = []
     for raw_path in clean_string_list(paths):
         normalized = os.path.normpath(raw_path)
@@ -115,3 +69,26 @@ def paths_to_absolute(paths, project_dir):
             normalized = os.path.abspath(os.path.join(project_dir, normalized))
         absolute_paths.append(normalized)
     return clean_string_list(absolute_paths)
+
+def retrievejson_from(key, file_name, folderpath):
+    if not os.path.isdir(folderpath):
+        return ValueError(f"Path does not exist! {folderpath}")
+    
+    filepath = os.path.join(folderpath, file_name)
+
+    if not os.path.isfile(filepath):
+        return ValueError(f"Check the file name: {file_name}")
+    
+    if not file_name.endswith('.json'):
+        return ValueError(f"File is not JSON. Suggest you try calling retrievefile_from instead")
+    
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if key in data:
+            return data[key]
+        else:
+            return ValueError(f"Key does not exist.")
+    except Exception as e:
+        return ValueError(f"Error reading JSON file: {e}")
+    
