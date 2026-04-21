@@ -29,6 +29,12 @@ This work is licensed under a
 [cc-by-nc-image]: https://licensebuttons.net/l/by-nc/4.0/88x31.png
 [cc-by-nc-shield]: https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg
 
+### How do I use it?
+
+It is very simple! Download it first and see for yourself!
+
+Alternatively, click [here](https://drive.google.com/file/d/1XXfzINSsi58QbG3oTIysDBCH2K_42g0N/view) for a quick demo video.
+
 ### Star History
 
 [![Star History Chart](https://api.star-history.com/image?repos=Project-for-Accessible-Radio-Telescopes/AH-Control&type=date&legend=top-left)](https://www.star-history.com/?repos=Project-for-Accessible-Radio-Telescopes%2FAH-Control&type=date&legend=top-left)
